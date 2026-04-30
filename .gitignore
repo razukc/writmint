@@ -1,0 +1,14 @@
+node_modules/
+dist/
+dist-example/
+*.log
+.DS_Store
+coverage/
+
+.vscode/
+
+# npm packed tarballs
+*.tgz
+
+.kiro
+test-output.json

@@ -1,0 +1,14 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    "outDir": "./fixtures-dist",
+    "declaration": false,
+    "declarationMap": false,
+    "incremental": false,
+    "noUnusedLocals": false,
+    "noUnusedParameters": false
+  },
+  "include": ["fixtures/**/*", "src/**/*"],
+  "exclude": ["node_modules", "dist", "tests"]
+}

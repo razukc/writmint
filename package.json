@@ -1,0 +1,83 @@
+{
+  "name": "writmint",
+  "version": "0.1.0",
+  "description": "An issuance authority for AI-authored features. Declare a feature manifest, scope its capabilities, replay its execution, and require human approval before it runs in production.",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "browser": "./dist/index.browser.js",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist/",
+    "LICENSE",
+    "NOTICE",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "rimraf dist && tsc",
+    "test": "vitest run --reporter=json --outputFile=./test-output.json",
+    "test:verbose": "vitest run",
+    "test:watch": "vitest",
+    "demo": "npm run demo:smoke && npm run demo:approval && npm run demo:replay && npm run demo:e2e",
+    "demo:smoke": "tsx fixtures/suspicious-transaction-triage/smoke.ts",
+    "demo:approval": "tsx fixtures/suspicious-transaction-triage/approval-smoke.ts",
+    "demo:replay": "tsx fixtures/suspicious-transaction-triage/replay-smoke.ts",
+    "demo:e2e": "tsx fixtures/suspicious-transaction-triage/end-to-end.ts",
+    "prepublishOnly": "npm run build && npm test"
+  },
+  "keywords": [
+    "ai-agents",
+    "feature-manifest",
+    "capability-scoping",
+    "approval-workflow",
+    "audit",
+    "replay",
+    "governance",
+    "enterprise",
+    "browser-extension",
+    "typescript"
+  ],
+  "author": {
+    "name": "Raju K.C",
+    "email": "kc.razu@gmail.com"
+  },
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/razukc/writmint.git"
+  },
+  "homepage": "https://github.com/razukc/writmint#readme",
+  "bugs": {
+    "url": "https://github.com/razukc/writmint/issues"
+  },
+  "engines": {
+    "node": ">=22.0.0",
+    "npm": ">=10.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@vitest/coverage-v8": "^4.0.15",
+    "fast-check": "^3.15.0",
+    "rimraf": "^6.1.2",
+    "tsx": "^4.19.0",
+    "typescript": "^5.3.3",
+    "vitest": "^4.0.15"
+  },
+  "optionalDependencies": {
+    "@types/react": "^18.2.0",
+    "@types/react-dom": "^18.2.0",
+    "@vitejs/plugin-react": "^4.2.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "vite": "^7.2.6"
+  },
+  "dependencies": {
+    "fast-glob": "^3.3.3"
+  }
+}
