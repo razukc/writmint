@@ -9,10 +9,16 @@ export default defineConfig({
     // Performance optimizations
     pool: 'threads',
     poolOptions: {
+      // Expose global.gc to test workers. Memory-leak tests force a full GC
+      // before measuring heapUsed; without --expose-gc, those calls are no-ops
+      // and V8 heuristics leave uncollected garbage in the snapshot, which
+      // produces false positives on Node 24 / V8 13.x. Other tests guard with
+      // `if (global.gc)` so this is safe.
       threads: {
         singleThread: false,
         minThreads: 1,
-        maxThreads: 4
+        maxThreads: 4,
+        execArgv: ['--expose-gc']
       }
     },
     // Optimize for CI/local development
