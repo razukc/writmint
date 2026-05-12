@@ -1,13 +1,13 @@
 import type {
-  Capability,
-  CapabilityId,
+  Permission,
+  PermissionId,
   HttpMethod,
-  NetworkCapability,
-  StorageCapability,
+  NetworkPermission,
+  StoragePermission,
   StorageMode,
   ActionManifest,
-  FeatureManifest,
-} from './feature-manifest.js';
+  CapabilityManifest,
+} from './capability-manifest.js';
 import { formatStructuredError, type StructuredError } from './errors.js';
 
 export type { StructuredError };
@@ -35,12 +35,12 @@ export interface NetworkResponse {
 }
 
 export interface NetworkBroker {
-  readonly capabilityId: CapabilityId;
+  readonly capabilityId: PermissionId;
   request(input: NetworkRequest): Promise<NetworkResponse>;
 }
 
 export interface StorageBroker {
-  readonly capabilityId: CapabilityId;
+  readonly capabilityId: PermissionId;
   readonly mode: StorageMode;
   get(key: string): Promise<unknown>;
   put(key: string, value: unknown): Promise<void>;
@@ -49,18 +49,18 @@ export interface StorageBroker {
 }
 
 export interface ClockBroker {
-  readonly capabilityId: CapabilityId;
+  readonly capabilityId: PermissionId;
   now(): number;
   iso(): string;
 }
 
 export interface AuditBroker {
-  readonly capabilityId: CapabilityId;
+  readonly capabilityId: PermissionId;
   emit(event: string, payload?: unknown): void;
 }
 
 export interface UiBroker {
-  readonly capabilityId: CapabilityId;
+  readonly capabilityId: PermissionId;
 }
 
 export type Broker =
@@ -86,7 +86,7 @@ export interface ClockTransport {
 }
 
 export interface AuditTransport {
-  emit(event: { capabilityId: CapabilityId; name: string; payload?: unknown; at: number }): void;
+  emit(event: { capabilityId: PermissionId; name: string; payload?: unknown; at: number }): void;
 }
 
 export interface HostTransports {
@@ -97,8 +97,8 @@ export interface HostTransports {
 }
 
 export interface ActionCapabilityScope {
-  cap(id: CapabilityId): Broker;
-  has(id: CapabilityId): boolean;
+  cap(id: PermissionId): Broker;
+  has(id: PermissionId): boolean;
 }
 
 export interface FeatureCapabilityRegistry {
@@ -106,15 +106,15 @@ export interface FeatureCapabilityRegistry {
 }
 
 export function createFeatureCapabilityRegistry(
-  manifest: FeatureManifest,
+  manifest: CapabilityManifest,
   transports: HostTransports
 ): FeatureCapabilityRegistry {
-  const byId = new Map<CapabilityId, Capability>();
+  const byId = new Map<PermissionId, Permission>();
   for (const cap of manifest.capabilities) {
     byId.set(cap.id, cap);
   }
 
-  const brokers = new Map<CapabilityId, Broker>();
+  const brokers = new Map<PermissionId, Broker>();
   for (const cap of manifest.capabilities) {
     brokers.set(cap.id, buildBroker(cap, transports));
   }
@@ -148,10 +148,10 @@ export function createFeatureCapabilityRegistry(
       }
 
       return {
-        has(id: CapabilityId): boolean {
+        has(id: PermissionId): boolean {
           return allowed.has(id) && brokers.has(id);
         },
-        cap(id: CapabilityId): Broker {
+        cap(id: PermissionId): Broker {
           if (!byId.has(id)) {
             throw new CapabilityError({
               code: 'capability.undeclared',
@@ -187,7 +187,7 @@ export function createFeatureCapabilityRegistry(
   };
 }
 
-function buildBroker(cap: Capability, transports: HostTransports): Broker {
+function buildBroker(cap: Permission, transports: HostTransports): Broker {
   switch (cap.type) {
     case 'network':
       return buildNetworkBroker(cap, transports.network);
@@ -202,7 +202,7 @@ function buildBroker(cap: Capability, transports: HostTransports): Broker {
   }
 }
 
-function buildNetworkBroker(cap: NetworkCapability, transport?: NetworkTransport): NetworkBroker {
+function buildNetworkBroker(cap: NetworkPermission, transport?: NetworkTransport): NetworkBroker {
   const allowedHosts = new Set(cap.hosts);
   const allowedMethods = cap.methods ? new Set(cap.methods) : null;
   const id = cap.id;
@@ -251,7 +251,7 @@ function buildNetworkBroker(cap: NetworkCapability, transport?: NetworkTransport
   };
 }
 
-function buildStorageBroker(cap: StorageCapability, transport?: StorageTransport): StorageBroker {
+function buildStorageBroker(cap: StoragePermission, transport?: StorageTransport): StorageBroker {
   const id = cap.id;
   const scope = cap.scope;
   const mode = cap.mode;
@@ -313,7 +313,7 @@ function buildStorageBroker(cap: StorageCapability, transport?: StorageTransport
   };
 }
 
-function buildClockBroker(cap: Capability, transport?: ClockTransport): ClockBroker {
+function buildClockBroker(cap: Permission, transport?: ClockTransport): ClockBroker {
   const id = cap.id;
   return {
     capabilityId: id,
@@ -328,7 +328,7 @@ function buildClockBroker(cap: Capability, transport?: ClockTransport): ClockBro
   };
 }
 
-function buildAuditBroker(cap: Capability, transport?: AuditTransport): AuditBroker {
+function buildAuditBroker(cap: Permission, transport?: AuditTransport): AuditBroker {
   const id = cap.id;
   return {
     capabilityId: id,

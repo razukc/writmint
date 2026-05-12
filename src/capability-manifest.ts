@@ -1,10 +1,10 @@
 export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE' | 'HEAD' | 'OPTIONS';
 
-export type CapabilityId = string;
+export type PermissionId = string;
 
-export type NetworkCapability = {
+export type NetworkPermission = {
   type: 'network';
-  id: CapabilityId;
+  id: PermissionId;
   hosts: string[];
   methods?: HttpMethod[];
   reason: string;
@@ -12,40 +12,40 @@ export type NetworkCapability = {
 
 export type StorageMode = 'read' | 'write' | 'readwrite';
 
-export type StorageCapability = {
+export type StoragePermission = {
   type: 'storage';
-  id: CapabilityId;
+  id: PermissionId;
   scope: string;
   mode: StorageMode;
   reason: string;
 };
 
-export type UiCapability = {
+export type UiPermission = {
   type: 'ui';
-  id: CapabilityId;
+  id: PermissionId;
   reason: string;
 };
 
-export type ClockCapability = {
+export type ClockPermission = {
   type: 'clock';
-  id: CapabilityId;
+  id: PermissionId;
   reason: string;
 };
 
-export type AuditCapability = {
+export type AuditPermission = {
   type: 'audit';
-  id: CapabilityId;
+  id: PermissionId;
   reason: string;
 };
 
-export type Capability =
-  | NetworkCapability
-  | StorageCapability
-  | UiCapability
-  | ClockCapability
-  | AuditCapability;
+export type Permission =
+  | NetworkPermission
+  | StoragePermission
+  | UiPermission
+  | ClockPermission
+  | AuditPermission;
 
-export type CapabilityType = Capability['type'];
+export type PermissionType = Permission['type'];
 
 export type JSONSchema = {
   type?: 'string' | 'number' | 'integer' | 'boolean' | 'object' | 'array' | 'null';
@@ -71,7 +71,7 @@ export interface ActionManifest {
   description: string;
   input: JSONSchema;
   output: JSONSchema;
-  capabilities: CapabilityId[];
+  capabilities: PermissionId[];
   destructive?: boolean;
   handler: string;
   redact?: string[];
@@ -84,33 +84,33 @@ export interface ScreenManifest {
   steps?: string[];
 }
 
-export interface FeatureEvents {
+export interface CapabilityEvents {
   emits?: string[];
   subscribes?: string[];
 }
 
-export interface FeatureImplementation {
+export interface CapabilityImplementation {
   type: 'module';
   entry: string;
 }
 
-export interface FeatureManifest {
+export interface CapabilityManifest {
   schemaVersion: 1;
   id: string;
   version: string;
   title: string;
   description: string;
-  capabilities: Capability[];
+  capabilities: Permission[];
   config?: Record<string, ConfigField>;
   actions: ActionManifest[];
   screens?: ScreenManifest[];
-  events?: FeatureEvents;
-  implementation: FeatureImplementation;
+  events?: CapabilityEvents;
+  implementation: CapabilityImplementation;
 }
 
-export const FEATURE_MANIFEST_SCHEMA_VERSION = 1 as const;
+export const CAPABILITY_MANIFEST_SCHEMA_VERSION = 1 as const;
 
-export const CAPABILITY_TYPES: readonly CapabilityType[] = [
+export const PERMISSION_TYPES: readonly PermissionType[] = [
   'network',
   'storage',
   'ui',
@@ -142,7 +142,7 @@ export interface ManifestValidationResult {
 const SEMVER_RE = /^\d+\.\d+\.\d+(?:-[\w.-]+)?(?:\+[\w.-]+)?$/;
 const ID_RE = /^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$/;
 
-export function validateFeatureManifest(input: unknown): ManifestValidationResult {
+export function validateCapabilityManifest(input: unknown): ManifestValidationResult {
   const errors: ManifestError[] = [];
   const push = (e: ManifestError) => errors.push(e);
 
@@ -163,13 +163,13 @@ export function validateFeatureManifest(input: unknown): ManifestValidationResul
 
   const m = input as Record<string, unknown>;
 
-  if (m.schemaVersion !== FEATURE_MANIFEST_SCHEMA_VERSION) {
+  if (m.schemaVersion !== CAPABILITY_MANIFEST_SCHEMA_VERSION) {
     push({
       code: 'manifest.schema_version',
       where: '$.schemaVersion',
-      expected: String(FEATURE_MANIFEST_SCHEMA_VERSION),
+      expected: String(CAPABILITY_MANIFEST_SCHEMA_VERSION),
       actual: String(m.schemaVersion),
-      fixHint: `Set schemaVersion to ${FEATURE_MANIFEST_SCHEMA_VERSION}.`,
+      fixHint: `Set schemaVersion to ${CAPABILITY_MANIFEST_SCHEMA_VERSION}.`,
     });
   }
 
@@ -188,7 +188,7 @@ export function validateFeatureManifest(input: unknown): ManifestValidationResul
       fixHint: 'Set capabilities to an array (use [] if none, but actions cannot reference any).',
     });
   } else {
-    m.capabilities.forEach((cap, i) => validateCapability(cap, `$.capabilities[${i}]`, capabilityIds, push));
+    m.capabilities.forEach((cap, i) => validatePermission(cap, `$.capabilities[${i}]`, capabilityIds, push));
   }
 
   if (m.config !== undefined) {
@@ -286,7 +286,7 @@ export function validateFeatureManifest(input: unknown): ManifestValidationResul
   return { valid: errors.length === 0, errors };
 }
 
-function validateCapability(
+function validatePermission(
   cap: unknown,
   where: string,
   seen: Set<string>,
@@ -305,11 +305,11 @@ function validateCapability(
 
   const c = cap as Record<string, unknown>;
   const type = c.type;
-  if (typeof type !== 'string' || !CAPABILITY_TYPES.includes(type as CapabilityType)) {
+  if (typeof type !== 'string' || !PERMISSION_TYPES.includes(type as PermissionType)) {
     push({
       code: 'capability.type',
       where: `${where}.type`,
-      expected: `one of ${CAPABILITY_TYPES.join(', ')}`,
+      expected: `one of ${PERMISSION_TYPES.join(', ')}`,
       actual: String(type),
       fixHint: 'Use a supported capability type.',
     });

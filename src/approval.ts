@@ -1,4 +1,4 @@
-import type { FeatureManifest, ActionManifest } from './feature-manifest.js';
+import type { CapabilityManifest, ActionManifest } from './capability-manifest.js';
 import type {
   HostTransports,
   AuditTransport,
@@ -18,7 +18,7 @@ export type FeatureStatus =
   | 'revoked';
 
 export interface FeatureRecord {
-  manifest: FeatureManifest;
+  manifest: CapabilityManifest;
   versionHash: string;
   status: FeatureStatus;
   approvedBy: string | null;
@@ -68,7 +68,7 @@ export interface ApproveInput {
 export class ApprovalLifecycle {
   constructor(private store: FeatureStore) {}
 
-  submit(manifest: FeatureManifest): FeatureRecord {
+  submit(manifest: CapabilityManifest): FeatureRecord {
     const versionHash = hashManifest(manifest);
     const existing = this.store.get(manifest.id);
     if (existing && (existing.status === 'approved' || existing.status === 'active')) {
@@ -244,7 +244,7 @@ export class MemoryAuditSink implements AuditSink {
 
 export interface AuditingTransports {
   base: HostTransports;
-  manifest: FeatureManifest;
+  manifest: CapabilityManifest;
   record: FeatureRecord;
   sink: AuditSink;
 }
@@ -423,7 +423,7 @@ function redactNetworkInput(input: NetworkRequest): unknown {
   return { url, method };
 }
 
-export function hashManifest(manifest: FeatureManifest): string {
+export function hashManifest(manifest: CapabilityManifest): string {
   const canonical = canonicalize(manifest);
   return 'sha256:' + sha256Hex(canonical);
 }
