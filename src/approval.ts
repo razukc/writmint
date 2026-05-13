@@ -10,42 +10,42 @@ import type {
 } from './capabilities.js';
 import { formatStructuredError, type StructuredError } from './errors.js';
 
-export type FeatureStatus =
+export type CapabilityStatus =
   | 'draft'
   | 'submitted'
   | 'approved'
   | 'active'
   | 'revoked';
 
-export interface FeatureRecord {
+export interface CapabilityRecord {
   manifest: CapabilityManifest;
   versionHash: string;
-  status: FeatureStatus;
+  status: CapabilityStatus;
   approvedBy: string | null;
   destructiveApprovedBy: string | null;
   approvedAtHash: string | null;
 }
 
-export interface FeatureStore {
-  put(record: FeatureRecord): void;
-  get(featureId: string): FeatureRecord | null;
-  list(): FeatureRecord[];
-  remove(featureId: string): void;
+export interface CapabilityStore {
+  put(record: CapabilityRecord): void;
+  get(capabilityId: string): CapabilityRecord | null;
+  list(): CapabilityRecord[];
+  remove(capabilityId: string): void;
 }
 
-export class MemoryFeatureStore implements FeatureStore {
-  private byId = new Map<string, FeatureRecord>();
-  put(record: FeatureRecord): void {
+export class MemoryCapabilityStore implements CapabilityStore {
+  private byId = new Map<string, CapabilityRecord>();
+  put(record: CapabilityRecord): void {
     this.byId.set(record.manifest.id, record);
   }
-  get(featureId: string): FeatureRecord | null {
-    return this.byId.get(featureId) ?? null;
+  get(capabilityId: string): CapabilityRecord | null {
+    return this.byId.get(capabilityId) ?? null;
   }
-  list(): FeatureRecord[] {
+  list(): CapabilityRecord[] {
     return [...this.byId.values()];
   }
-  remove(featureId: string): void {
-    this.byId.delete(featureId);
+  remove(capabilityId: string): void {
+    this.byId.delete(capabilityId);
   }
 }
 
@@ -59,21 +59,21 @@ export class ApprovalError extends Error {
 }
 
 export interface ApproveInput {
-  featureId: string;
+  capabilityId: string;
   versionHash: string;
   approvedBy: string;
   destructiveApprovedBy?: string;
 }
 
 export class ApprovalLifecycle {
-  constructor(private store: FeatureStore) {}
+  constructor(private store: CapabilityStore) {}
 
-  submit(manifest: CapabilityManifest): FeatureRecord {
+  submit(manifest: CapabilityManifest): CapabilityRecord {
     const versionHash = hashManifest(manifest);
     const existing = this.store.get(manifest.id);
     if (existing && (existing.status === 'approved' || existing.status === 'active')) {
       if (existing.versionHash !== versionHash) {
-        const next: FeatureRecord = {
+        const next: CapabilityRecord = {
           manifest,
           versionHash,
           status: 'submitted',
@@ -85,7 +85,7 @@ export class ApprovalLifecycle {
         return next;
       }
     }
-    const record: FeatureRecord = {
+    const record: CapabilityRecord = {
       manifest,
       versionHash,
       status: 'submitted',
@@ -97,12 +97,12 @@ export class ApprovalLifecycle {
     return record;
   }
 
-  approve(input: ApproveInput): FeatureRecord {
-    const record = this.requireRecord(input.featureId);
+  approve(input: ApproveInput): CapabilityRecord {
+    const record = this.requireRecord(input.capabilityId);
     if (record.versionHash !== input.versionHash) {
       throw new ApprovalError({
         code: 'approval.hash_mismatch',
-        where: `feature[${input.featureId}].approve`,
+        where: `capability[${input.capabilityId}].approve`,
         expected: `versionHash ${record.versionHash}`,
         actual: input.versionHash,
         fixHint:
@@ -112,24 +112,24 @@ export class ApprovalLifecycle {
     if (record.status !== 'submitted') {
       throw new ApprovalError({
         code: 'approval.bad_state',
-        where: `feature[${input.featureId}].status`,
+        where: `capability[${input.capabilityId}].status`,
         expected: 'submitted',
         actual: record.status,
-        fixHint: 'Only submitted features can be approved. Submit the manifest first.',
+        fixHint: 'Only submitted capabilities can be approved. Submit the manifest first.',
       });
     }
     const hasDestructive = record.manifest.actions.some((a) => a.destructive === true);
     if (hasDestructive && !input.destructiveApprovedBy) {
       throw new ApprovalError({
         code: 'approval.destructive_required',
-        where: `feature[${input.featureId}].approve`,
-        expected: 'destructiveApprovedBy set (feature has destructive actions)',
+        where: `capability[${input.capabilityId}].approve`,
+        expected: 'destructiveApprovedBy set (capability has destructive actions)',
         actual: 'destructiveApprovedBy missing',
         fixHint:
-          'This feature has destructive actions; provide destructiveApprovedBy in addition to approvedBy.',
+          'This capability has destructive actions; provide destructiveApprovedBy in addition to approvedBy.',
       });
     }
-    const next: FeatureRecord = {
+    const next: CapabilityRecord = {
       ...record,
       status: 'approved',
       approvedBy: input.approvedBy,
@@ -140,56 +140,56 @@ export class ApprovalLifecycle {
     return next;
   }
 
-  activate(featureId: string): FeatureRecord {
-    const record = this.requireRecord(featureId);
+  activate(capabilityId: string): CapabilityRecord {
+    const record = this.requireRecord(capabilityId);
     if (record.status !== 'approved') {
       throw new ApprovalError({
         code: 'approval.activate_blocked',
-        where: `feature[${featureId}].status`,
+        where: `capability[${capabilityId}].status`,
         expected: 'approved',
         actual: record.status,
         fixHint:
-          'Only approved features can be activated. Move the feature through draft → submitted → approved first.',
+          'Only approved capabilities can be activated. Move the capability through draft → submitted → approved first.',
       });
     }
-    const next: FeatureRecord = { ...record, status: 'active' };
+    const next: CapabilityRecord = { ...record, status: 'active' };
     this.store.put(next);
     return next;
   }
 
-  revoke(featureId: string): FeatureRecord {
-    const record = this.requireRecord(featureId);
-    const next: FeatureRecord = { ...record, status: 'revoked' };
+  revoke(capabilityId: string): CapabilityRecord {
+    const record = this.requireRecord(capabilityId);
+    const next: CapabilityRecord = { ...record, status: 'revoked' };
     this.store.put(next);
     return next;
   }
 
-  assertRunnable(featureId: string, action: ActionManifest): FeatureRecord {
-    const record = this.requireRecord(featureId);
+  assertRunnable(capabilityId: string, action: ActionManifest): CapabilityRecord {
+    const record = this.requireRecord(capabilityId);
     if (record.status !== 'active') {
       throw new ApprovalError({
         code: 'approval.not_runnable',
-        where: `feature[${featureId}].status`,
+        where: `capability[${capabilityId}].status`,
         expected: 'active',
         actual: record.status,
         fixHint:
-          'Feature is not active. It must be approved and activated before any action can run.',
+          'Capability is not active. It must be approved and activated before any action can run.',
       });
     }
     if (record.approvedAtHash !== record.versionHash) {
       throw new ApprovalError({
         code: 'approval.stale',
-        where: `feature[${featureId}].approvedAtHash`,
+        where: `capability[${capabilityId}].approvedAtHash`,
         expected: record.versionHash,
         actual: record.approvedAtHash ?? 'null',
         fixHint:
-          'The feature has been changed since it was approved. Re-submit and re-approve.',
+          'The capability has been changed since it was approved. Re-submit and re-approve.',
       });
     }
     if (action.destructive === true && !record.destructiveApprovedBy) {
       throw new ApprovalError({
         code: 'approval.destructive_not_approved',
-        where: `feature[${featureId}].action[${action.id}]`,
+        where: `capability[${capabilityId}].action[${action.id}]`,
         expected: 'destructiveApprovedBy set on the approval',
         actual: 'destructiveApprovedBy null',
         fixHint:
@@ -199,15 +199,15 @@ export class ApprovalLifecycle {
     return record;
   }
 
-  private requireRecord(featureId: string): FeatureRecord {
-    const r = this.store.get(featureId);
+  private requireRecord(capabilityId: string): CapabilityRecord {
+    const r = this.store.get(capabilityId);
     if (!r) {
       throw new ApprovalError({
-        code: 'approval.unknown_feature',
-        where: `feature[${featureId}]`,
-        expected: 'a feature submitted to the store',
+        code: 'approval.unknown_capability',
+        where: `capability[${capabilityId}]`,
+        expected: 'a capability submitted to the store',
         actual: 'no record',
-        fixHint: 'Submit the feature manifest before referencing it.',
+        fixHint: 'Submit the capability manifest before referencing it.',
       });
     }
     return r;
@@ -218,14 +218,14 @@ export type AuditEventKind =
   | 'capability_call'
   | 'capability_denied'
   | 'lifecycle'
-  | 'feature_emit';
+  | 'capability_emit';
 
 export interface AuditEvent {
   at: number;
-  featureId: string;
-  featureVersionHash: string;
+  capabilityId: string;
+  capabilityVersionHash: string;
   actionId: string | null;
-  capabilityId: string | null;
+  permissionId: string | null;
   kind: AuditEventKind;
   payload: unknown;
   approvedBy: string | null;
@@ -245,7 +245,7 @@ export class MemoryAuditSink implements AuditSink {
 export interface AuditingTransports {
   base: HostTransports;
   manifest: CapabilityManifest;
-  record: FeatureRecord;
+  record: CapabilityRecord;
   sink: AuditSink;
 }
 
@@ -255,17 +255,17 @@ export function buildAuditingTransports({
   record,
   sink,
 }: AuditingTransports): HostTransports {
-  const featureId = manifest.id;
+  const capabilityId = manifest.id;
   const versionHash = record.versionHash;
   const approvedBy = record.approvedBy;
   const actionsById = new Map<string, ActionManifest>();
   for (const a of manifest.actions) actionsById.set(a.id, a);
 
-  const emit = (event: Omit<AuditEvent, 'featureId' | 'featureVersionHash' | 'approvedBy'>): void => {
+  const emit = (event: Omit<AuditEvent, 'capabilityId' | 'capabilityVersionHash' | 'approvedBy'>): void => {
     sink.write({
       ...event,
-      featureId,
-      featureVersionHash: versionHash,
+      capabilityId,
+      capabilityVersionHash: versionHash,
       approvedBy,
     });
   };
@@ -277,7 +277,7 @@ export function buildAuditingTransports({
         emit({
           at: Date.now(),
           actionId: null,
-          capabilityId: null,
+          permissionId: null,
           kind: 'capability_call',
           payload: { kind: 'network.request', input: redactNetworkInput(input), status: out.status },
         });
@@ -286,7 +286,7 @@ export function buildAuditingTransports({
         emit({
           at: Date.now(),
           actionId: null,
-          capabilityId: null,
+          permissionId: null,
           kind: 'capability_denied',
           payload: { kind: 'network.request', input: redactNetworkInput(input), error: String(e) },
         });
@@ -301,7 +301,7 @@ export function buildAuditingTransports({
       emit({
         at: Date.now(),
         actionId: null,
-        capabilityId: null,
+        permissionId: null,
         kind: 'capability_call',
         payload: { kind: 'storage.get', scope, key },
       });
@@ -312,7 +312,7 @@ export function buildAuditingTransports({
       emit({
         at: Date.now(),
         actionId: null,
-        capabilityId: null,
+        permissionId: null,
         kind: 'capability_call',
         payload: { kind: 'storage.put', scope, key },
       });
@@ -322,7 +322,7 @@ export function buildAuditingTransports({
       emit({
         at: Date.now(),
         actionId: null,
-        capabilityId: null,
+        permissionId: null,
         kind: 'capability_call',
         payload: { kind: 'storage.delete', scope, key },
       });
@@ -332,7 +332,7 @@ export function buildAuditingTransports({
       emit({
         at: Date.now(),
         actionId: null,
-        capabilityId: null,
+        permissionId: null,
         kind: 'capability_call',
         payload: { kind: 'storage.list', scope, prefix },
       });
@@ -350,11 +350,11 @@ export function buildAuditingTransports({
       const redacted = redactPayload(ev.payload, action ? actionsById.get(action) : undefined);
       sink.write({
         at: ev.at,
-        featureId,
-        featureVersionHash: versionHash,
+        capabilityId,
+        capabilityVersionHash: versionHash,
         actionId: action,
-        capabilityId: ev.capabilityId,
-        kind: 'feature_emit',
+        permissionId: ev.capabilityId,
+        kind: 'capability_emit',
         payload: { name: ev.name, payload: redacted },
         approvedBy,
       });
@@ -367,16 +367,16 @@ export function buildAuditingTransports({
 
 export function emitLifecycleEvent(
   sink: AuditSink,
-  record: FeatureRecord,
-  to: FeatureStatus,
+  record: CapabilityRecord,
+  to: CapabilityStatus,
   actor: string | null
 ): void {
   sink.write({
     at: Date.now(),
-    featureId: record.manifest.id,
-    featureVersionHash: record.versionHash,
+    capabilityId: record.manifest.id,
+    capabilityVersionHash: record.versionHash,
     actionId: null,
-    capabilityId: null,
+    permissionId: null,
     kind: 'lifecycle',
     payload: { transitionedTo: to, actor },
     approvedBy: record.approvedBy,

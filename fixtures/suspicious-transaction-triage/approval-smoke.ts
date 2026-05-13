@@ -2,7 +2,7 @@ import { manifest } from './manifest.js';
 import {
   ApprovalLifecycle,
   ApprovalError,
-  MemoryFeatureStore,
+  MemoryCapabilityStore,
   MemoryAuditSink,
   buildAuditingTransports,
   emitLifecycleEvent,
@@ -44,7 +44,7 @@ const baseTransports: HostTransports = {
 
 async function run(): Promise<void> {
   // 1. submit
-  const store = new MemoryFeatureStore();
+  const store = new MemoryCapabilityStore();
   const sink = new MemoryAuditSink();
   const lifecycle = new ApprovalLifecycle(store);
   const submitted = lifecycle.submit(manifest);
@@ -69,7 +69,7 @@ async function run(): Promise<void> {
   // 3. approve without destructiveApprovedBy fails (manifest has destructive action)
   try {
     lifecycle.approve({
-      featureId: manifest.id,
+      capabilityId: manifest.id,
       versionHash: submitted.versionHash,
       approvedBy: 'reviewer@bank',
     });
@@ -85,7 +85,7 @@ async function run(): Promise<void> {
   // 4. approve with mismatched hash is rejected
   try {
     lifecycle.approve({
-      featureId: manifest.id,
+      capabilityId: manifest.id,
       versionHash: 'hdeadbeef',
       approvedBy: 'reviewer@bank',
       destructiveApprovedBy: 'compliance@bank',
@@ -101,7 +101,7 @@ async function run(): Promise<void> {
 
   // 5. approve correctly, then activate
   const approved = lifecycle.approve({
-    featureId: manifest.id,
+    capabilityId: manifest.id,
     versionHash: submitted.versionHash,
     approvedBy: 'reviewer@bank',
     destructiveApprovedBy: 'compliance@bank',
@@ -110,7 +110,7 @@ async function run(): Promise<void> {
   const active = lifecycle.activate(manifest.id);
   emitLifecycleEvent(sink, active, 'active', 'reviewer@bank');
   check(
-    'feature is now active',
+    'capability is now active',
     active.status === 'active' && active.approvedBy === 'reviewer@bank',
     `status=${active.status}`
   );
@@ -136,12 +136,12 @@ async function run(): Promise<void> {
   lifecycle.revoke(manifest.id);
   try {
     lifecycle.assertRunnable(manifest.id, manifest.actions[0]);
-    check('revoked feature cannot run', false, 'no throw');
+    check('revoked capability cannot run', false, 'no throw');
   } catch (e) {
     if (e instanceof ApprovalError && e.structured.code === 'approval.not_runnable') {
-      check('revoked feature cannot run', true, e.structured.code);
+      check('revoked capability cannot run', true, e.structured.code);
     } else {
-      check('revoked feature cannot run', false, String(e));
+      check('revoked capability cannot run', false, String(e));
     }
   }
 
@@ -155,13 +155,13 @@ async function run(): Promise<void> {
     `${reSubmitted.versionHash} !== ${submitted.versionHash}`
   );
 
-  // 10. audit sink: capability calls are emitted with feature id and version hash, redaction is applied.
+  // 10. audit sink: capability calls are emitted with capability id and version hash, redaction is applied.
   const sink2 = new MemoryAuditSink();
-  const store2 = new MemoryFeatureStore();
+  const store2 = new MemoryCapabilityStore();
   const lifecycle2 = new ApprovalLifecycle(store2);
   const sub2 = lifecycle2.submit(manifest);
   const apr2 = lifecycle2.approve({
-    featureId: manifest.id,
+    capabilityId: manifest.id,
     versionHash: sub2.versionHash,
     approvedBy: 'reviewer@bank',
     destructiveApprovedBy: 'compliance@bank',
@@ -186,15 +186,15 @@ async function run(): Promise<void> {
     customer: { taxId: '123-45-6789', name: 'Jane Doe', email: 'jane@example.com' },
   });
 
-  const allHaveFeatureId = sink2.events.every((e) => e.featureId === manifest.id);
+  const allHaveCapabilityId = sink2.events.every((e) => e.capabilityId === manifest.id);
   check(
-    'every audit event carries featureId and versionHash',
-    allHaveFeatureId && sink2.events.every((e) => e.featureVersionHash === sub2.versionHash),
+    'every audit event carries capabilityId and versionHash',
+    allHaveCapabilityId && sink2.events.every((e) => e.capabilityVersionHash === sub2.versionHash),
     `${sink2.events.length} events`
   );
 
-  const featureEmit = sink2.events.find((e) => e.kind === 'feature_emit');
-  const payload = featureEmit?.payload as { payload: { customer: { taxId: string; email: string } } };
+  const capabilityEmit = sink2.events.find((e) => e.kind === 'capability_emit');
+  const payload = capabilityEmit?.payload as { payload: { customer: { taxId: string; email: string } } };
   check(
     'redact paths replace declared PII fields with [REDACTED]',
     payload?.payload?.customer?.taxId === '[REDACTED]' &&

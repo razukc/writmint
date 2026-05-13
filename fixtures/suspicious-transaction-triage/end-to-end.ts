@@ -13,12 +13,12 @@ import { withChaos, ChaosTimeoutError } from './chaos-transport.js';
 import {
   ApprovalLifecycle,
   ApprovalError,
-  MemoryFeatureStore,
+  MemoryCapabilityStore,
   MemoryAuditSink,
   buildAuditingTransports,
   emitLifecycleEvent,
 } from '../../src/approval.js';
-import type { FeatureRecord } from '../../src/approval.js';
+import type { CapabilityRecord } from '../../src/approval.js';
 
 interface Step {
   name: string;
@@ -174,11 +174,11 @@ async function runFeatureMutated(
 }
 
 async function withFreshState(): Promise<{
-  store: MemoryFeatureStore;
+  store: MemoryCapabilityStore;
   sink: MemoryAuditSink;
   lifecycle: ApprovalLifecycle;
 }> {
-  const store = new MemoryFeatureStore();
+  const store = new MemoryCapabilityStore();
   const sink = new MemoryAuditSink();
   const lifecycle = new ApprovalLifecycle(store);
   return { store, sink, lifecycle };
@@ -221,7 +221,7 @@ async function main(): Promise<void> {
   } catch (e) {
     log(
       'unsubmitted feature cannot run',
-      e instanceof ApprovalError && e.structured.code === 'approval.unknown_feature',
+      e instanceof ApprovalError && e.structured.code === 'approval.unknown_capability',
       e instanceof ApprovalError ? e.structured.code : String(e),
       [5]
     );
@@ -233,7 +233,7 @@ async function main(): Promise<void> {
   // approver tries with wrong hash
   try {
     lifecycle.approve({
-      featureId: manifest.id,
+      capabilityId: manifest.id,
       versionHash: 'h00000000',
       approvedBy: 'reviewer@bank',
       destructiveApprovedBy: 'compliance@bank',
@@ -251,7 +251,7 @@ async function main(): Promise<void> {
   // approver forgets destructive lane
   try {
     lifecycle.approve({
-      featureId: manifest.id,
+      capabilityId: manifest.id,
       versionHash: submitted.versionHash,
       approvedBy: 'reviewer@bank',
     });
@@ -266,7 +266,7 @@ async function main(): Promise<void> {
   }
 
   const approved = lifecycle.approve({
-    featureId: manifest.id,
+    capabilityId: manifest.id,
     versionHash: submitted.versionHash,
     approvedBy: 'reviewer@bank',
     destructiveApprovedBy: 'compliance@bank',
@@ -333,8 +333,8 @@ async function main(): Promise<void> {
   }
 
   banner('PHASE D — Audit redaction (Pillar 5)');
-  const featureEmits = sink.events.filter((e) => e.kind === 'feature_emit');
-  const alertLoaded = featureEmits.find(
+  const capabilityEmits = sink.events.filter((e) => e.kind === 'capability_emit');
+  const alertLoaded = capabilityEmits.find(
     (e) => (e.payload as { name: string }).name === 'triage.alert_loaded'
   );
   const aPayload = alertLoaded?.payload as
@@ -351,12 +351,12 @@ async function main(): Promise<void> {
 
   const allTagged = sink.events.every(
     (e) =>
-      e.featureId === manifest.id &&
-      e.featureVersionHash === active.versionHash &&
+      e.capabilityId === manifest.id &&
+      e.capabilityVersionHash === active.versionHash &&
       e.approvedBy === 'reviewer@bank' || e.kind === 'lifecycle'
   );
   log(
-    'every audit event carries featureId + versionHash (and approver post-approval)',
+    'every audit event carries capabilityId + versionHash (and approver post-approval)',
     allTagged,
     `${sink.events.length} events`,
     [5]
@@ -430,7 +430,7 @@ async function main(): Promise<void> {
   );
 
   // Old approval is now stale; trying to run any action throws.
-  let staleRecord: FeatureRecord | null = null;
+  let staleRecord: CapabilityRecord | null = null;
   try {
     staleRecord = lifecycle.assertRunnable(manifest.id, manifest.actions[0]);
     log('prior approval becomes stale after manifest change', false, 'no throw', [5]);
@@ -448,7 +448,7 @@ async function main(): Promise<void> {
 
   banner('PHASE G — Revoke kills further runs (Pillar 5)');
   const reApproved = lifecycle.approve({
-    featureId: manifest.id,
+    capabilityId: manifest.id,
     versionHash: reSub.versionHash,
     approvedBy: 'reviewer@bank',
     destructiveApprovedBy: 'compliance@bank',
@@ -471,12 +471,12 @@ async function main(): Promise<void> {
 
   banner('PHASE H — Failure-path correctness with chaos transport (Pillars 2+3+4+5)');
   // Set up: a fresh active feature record + a fresh sink so audit assertions are scoped.
-  const phaseHStore = new MemoryFeatureStore();
+  const phaseHStore = new MemoryCapabilityStore();
   const phaseHSink = new MemoryAuditSink();
   const phaseHLifecycle = new ApprovalLifecycle(phaseHStore);
   const phaseHSubmitted = phaseHLifecycle.submit(manifest);
   phaseHLifecycle.approve({
-    featureId: manifest.id,
+    capabilityId: manifest.id,
     versionHash: phaseHSubmitted.versionHash,
     approvedBy: 'reviewer@bank',
     destructiveApprovedBy: 'compliance@bank',
@@ -518,7 +518,7 @@ async function main(): Promise<void> {
   );
 
   // (b) Auditability — the run that failed produced an audit trail up to the failure point.
-  const phaseHEmits = phaseHSink.events.filter((e) => e.kind === 'feature_emit');
+  const phaseHEmits = phaseHSink.events.filter((e) => e.kind === 'capability_emit');
   const sawAlertLoaded = phaseHEmits.some(
     (e) => (e.payload as { name: string }).name === 'triage.alert_loaded'
   );
