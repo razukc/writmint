@@ -76,9 +76,9 @@ export async function replay<T>(
       code: 'replay.unconsumed_entry',
       where: `recording.entries[${cursor.i}]`,
       expected: 'all recorded entries consumed',
-      actual: `feature stopped after ${cursor.i}/${recording.entries.length} entries; next was ${next.kind}`,
+      actual: `capability stopped after ${cursor.i}/${recording.entries.length} entries; next was ${next.kind}`,
       fixHint:
-        'The feature made fewer broker calls than the recording. Re-record after the change, or revert the change that removed calls.',
+        'The capability made fewer broker calls than the recording. Re-record after the change, or revert the change that removed calls.',
     });
   }
   return { output, entries: recording.entries.slice(0, cursor.i) };
@@ -230,7 +230,7 @@ function buildReplayTransports(
         expected: `no more calls (recording length ${recording.entries.length})`,
         actual: `${kind} ${stringify(expectedInput)}`,
         fixHint:
-          'The feature made more broker calls than the recording. Re-record after the change, or revert the change that added calls.',
+          'The capability made more broker calls than the recording. Re-record after the change, or revert the change that added calls.',
       });
     }
     const entry = recording.entries[cursor.i];
@@ -241,7 +241,7 @@ function buildReplayTransports(
         expected: `${entry.kind} ${stringify(entry.input)}`,
         actual: `${kind} ${stringify(expectedInput)}`,
         fixHint:
-          'Broker call kind does not match the recording at this position. The feature changed; re-record or revert.',
+          'Broker call kind does not match the recording at this position. The capability changed; re-record or revert.',
       });
     }
     if (!deepEqual(entry.input, expectedInput)) {
@@ -251,7 +251,7 @@ function buildReplayTransports(
         expected: stringify(entry.input),
         actual: stringify(expectedInput),
         fixHint:
-          'Broker input differs from the recording at this position. The feature changed; re-record or revert.',
+          'Broker input differs from the recording at this position. The capability changed; re-record or revert.',
       });
     }
     cursor.i++;

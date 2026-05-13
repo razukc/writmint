@@ -222,7 +222,7 @@ export function validateCapabilityManifest(input: unknown): ManifestValidationRe
       where: '$.actions',
       expected: 'at least one action',
       actual: 'empty array',
-      fixHint: 'A feature must declare at least one action; otherwise it has no behavior.',
+      fixHint: 'A capability must declare at least one action; otherwise it has no behavior.',
     });
   } else {
     m.actions.forEach((a, i) =>
