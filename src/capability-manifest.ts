@@ -155,7 +155,7 @@ export function validateCapabilityManifest(input: unknown): ManifestValidationRe
           where: '$',
           expected: 'object',
           actual: typeOf(input),
-          fixHint: 'Provide a FeatureManifest object.',
+          fixHint: 'Provide a CapabilityManifest object.',
         },
       ],
     };

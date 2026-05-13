@@ -1,6 +1,6 @@
-import type { FeatureManifest } from '../../src/feature-manifest.js';
+import type { CapabilityManifest } from '../../src/capability-manifest.js';
 
-export const manifest: FeatureManifest = {
+export const manifest: CapabilityManifest = {
   schemaVersion: 1,
   id: 'ops.fraud.suspicious_transaction_triage',
   version: '0.1.0',
