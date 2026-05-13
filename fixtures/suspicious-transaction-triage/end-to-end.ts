@@ -2,7 +2,7 @@ import { manifest } from './manifest.js';
 import { validateCapabilityManifest } from '../../src/capability-manifest.js';
 import {
   createPermissionRegistry,
-  CapabilityError,
+  PermissionError,
   type HostTransports,
   type NetworkBroker,
   type StorageBroker,
@@ -198,14 +198,14 @@ async function main(): Promise<void> {
 
   // negative: a tampered manifest must fail with structured errors.
   const broken = JSON.parse(JSON.stringify(manifest));
-  broken.actions[0].capabilities.push('does.not.exist');
+  broken.actions[0].permissions.push('does.not.exist');
   delete broken.implementation;
   const brokenResult = validateCapabilityManifest(broken);
   const codes = new Set(brokenResult.errors.map((e) => e.code));
   log(
     'tampered manifest rejected with structured errors (Pillars 1+3)',
     !brokenResult.valid &&
-      codes.has('action.capability_ref.unknown') &&
+      codes.has('action.permission_ref.unknown') &&
       codes.has('manifest.implementation.type'),
     `codes: ${[...codes].join(', ')}`,
     [1, 3]
@@ -326,8 +326,8 @@ async function main(): Promise<void> {
   } catch (e) {
     log(
       'cross-action capability bleed is denied (Pillars 2+3)',
-      e instanceof CapabilityError && e.structured.code === 'capability.denied',
-      e instanceof CapabilityError ? e.structured.code : String(e),
+      e instanceof PermissionError && e.structured.code === 'permission.denied',
+      e instanceof PermissionError ? e.structured.code : String(e),
       [2, 3]
     );
   }
@@ -589,7 +589,7 @@ async function main(): Promise<void> {
         captured.push({
           index: idx,
           kind: 'audit.emit',
-          input: { capabilityId: event.capabilityId, name: event.name, payload: event.payload },
+          input: { permissionId: event.permissionId, name: event.name, payload: event.payload },
           output: undefined,
           threw: false,
         });

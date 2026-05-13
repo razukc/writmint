@@ -71,7 +71,7 @@ export interface ActionManifest {
   description: string;
   input: JSONSchema;
   output: JSONSchema;
-  capabilities: PermissionId[];
+  permissions: PermissionId[];
   destructive?: boolean;
   handler: string;
   redact?: string[];
@@ -100,7 +100,7 @@ export interface CapabilityManifest {
   version: string;
   title: string;
   description: string;
-  capabilities: Permission[];
+  permissions: Permission[];
   config?: Record<string, ConfigField>;
   actions: ActionManifest[];
   screens?: ScreenManifest[];
@@ -178,17 +178,17 @@ export function validateCapabilityManifest(input: unknown): ManifestValidationRe
   requireString(m, 'title', '$.title', push);
   requireString(m, 'description', '$.description', push);
 
-  const capabilityIds = new Set<string>();
-  if (!Array.isArray(m.capabilities)) {
+  const permissionIds = new Set<string>();
+  if (!Array.isArray(m.permissions)) {
     push({
-      code: 'manifest.capabilities.type',
-      where: '$.capabilities',
+      code: 'manifest.permissions.type',
+      where: '$.permissions',
       expected: 'array',
-      actual: typeOf(m.capabilities),
-      fixHint: 'Set capabilities to an array (use [] if none, but actions cannot reference any).',
+      actual: typeOf(m.permissions),
+      fixHint: 'Set permissions to an array (use [] if none, but actions cannot reference any).',
     });
   } else {
-    m.capabilities.forEach((cap, i) => validatePermission(cap, `$.capabilities[${i}]`, capabilityIds, push));
+    m.permissions.forEach((p, i) => validatePermission(p, `$.permissions[${i}]`, permissionIds, push));
   }
 
   if (m.config !== undefined) {
@@ -226,7 +226,7 @@ export function validateCapabilityManifest(input: unknown): ManifestValidationRe
     });
   } else {
     m.actions.forEach((a, i) =>
-      validateAction(a, `$.actions[${i}]`, actionIds, capabilityIds, push)
+      validateAction(a, `$.actions[${i}]`, actionIds, permissionIds, push)
     );
   }
 
@@ -287,66 +287,66 @@ export function validateCapabilityManifest(input: unknown): ManifestValidationRe
 }
 
 function validatePermission(
-  cap: unknown,
+  perm: unknown,
   where: string,
   seen: Set<string>,
   push: (e: ManifestError) => void
 ): void {
-  if (!isPlainObject(cap)) {
+  if (!isPlainObject(perm)) {
     push({
-      code: 'capability.not_object',
+      code: 'permission.not_object',
       where,
       expected: 'object',
-      actual: typeOf(cap),
-      fixHint: 'Each capability must be an object with type, id, reason.',
+      actual: typeOf(perm),
+      fixHint: 'Each permission must be an object with type, id, reason.',
     });
     return;
   }
 
-  const c = cap as Record<string, unknown>;
-  const type = c.type;
+  const p = perm as Record<string, unknown>;
+  const type = p.type;
   if (typeof type !== 'string' || !PERMISSION_TYPES.includes(type as PermissionType)) {
     push({
-      code: 'capability.type',
+      code: 'permission.type',
       where: `${where}.type`,
       expected: `one of ${PERMISSION_TYPES.join(', ')}`,
       actual: String(type),
-      fixHint: 'Use a supported capability type.',
+      fixHint: 'Use a supported permission type.',
     });
     return;
   }
 
-  const idOk = requireString(c, 'id', `${where}.id`, push, ID_RE);
-  if (idOk && typeof c.id === 'string') {
-    if (seen.has(c.id)) {
+  const idOk = requireString(p, 'id', `${where}.id`, push, ID_RE);
+  if (idOk && typeof p.id === 'string') {
+    if (seen.has(p.id)) {
       push({
-        code: 'capability.duplicate_id',
+        code: 'permission.duplicate_id',
         where: `${where}.id`,
-        expected: 'unique capability id',
-        actual: `duplicate "${c.id}"`,
-        fixHint: 'Each capability id must be unique within the manifest.',
+        expected: 'unique permission id',
+        actual: `duplicate "${p.id}"`,
+        fixHint: 'Each permission id must be unique within the manifest.',
       });
     } else {
-      seen.add(c.id);
+      seen.add(p.id);
     }
   }
 
-  requireString(c, 'reason', `${where}.reason`, push);
+  requireString(p, 'reason', `${where}.reason`, push);
 
   if (type === 'network') {
-    if (!Array.isArray(c.hosts) || c.hosts.length === 0) {
+    if (!Array.isArray(p.hosts) || p.hosts.length === 0) {
       push({
-        code: 'capability.network.hosts',
+        code: 'permission.network.hosts',
         where: `${where}.hosts`,
         expected: 'non-empty string array',
-        actual: typeOf(c.hosts),
-        fixHint: 'List the hostnames this capability is allowed to reach.',
+        actual: typeOf(p.hosts),
+        fixHint: 'List the hostnames this permission is allowed to reach.',
       });
     } else {
-      c.hosts.forEach((h, i) => {
+      p.hosts.forEach((h, i) => {
         if (typeof h !== 'string' || h.length === 0) {
           push({
-            code: 'capability.network.host_value',
+            code: 'permission.network.host_value',
             where: `${where}.hosts[${i}]`,
             expected: 'non-empty string',
             actual: typeOf(h),
@@ -355,20 +355,20 @@ function validatePermission(
         }
       });
     }
-    if (c.methods !== undefined) {
-      if (!Array.isArray(c.methods)) {
+    if (p.methods !== undefined) {
+      if (!Array.isArray(p.methods)) {
         push({
-          code: 'capability.network.methods',
+          code: 'permission.network.methods',
           where: `${where}.methods`,
           expected: 'array of HTTP methods',
-          actual: typeOf(c.methods),
+          actual: typeOf(p.methods),
           fixHint: `Use a subset of ${HTTP_METHODS.join(', ')}.`,
         });
       } else {
-        c.methods.forEach((mm, i) => {
+        p.methods.forEach((mm, i) => {
           if (typeof mm !== 'string' || !HTTP_METHODS.includes(mm as HttpMethod)) {
             push({
-              code: 'capability.network.method_value',
+              code: 'permission.network.method_value',
               where: `${where}.methods[${i}]`,
               expected: `one of ${HTTP_METHODS.join(', ')}`,
               actual: String(mm),
@@ -381,13 +381,13 @@ function validatePermission(
   }
 
   if (type === 'storage') {
-    requireString(c, 'scope', `${where}.scope`, push);
-    if (typeof c.mode !== 'string' || !STORAGE_MODES.includes(c.mode as StorageMode)) {
+    requireString(p, 'scope', `${where}.scope`, push);
+    if (typeof p.mode !== 'string' || !STORAGE_MODES.includes(p.mode as StorageMode)) {
       push({
-        code: 'capability.storage.mode',
+        code: 'permission.storage.mode',
         where: `${where}.mode`,
         expected: `one of ${STORAGE_MODES.join(', ')}`,
-        actual: String(c.mode),
+        actual: String(p.mode),
         fixHint: 'Storage mode must be read, write, or readwrite.',
       });
     }
@@ -398,7 +398,7 @@ function validateAction(
   action: unknown,
   where: string,
   seen: Set<string>,
-  capabilityIds: Set<string>,
+  permissionIds: Set<string>,
   push: (e: ManifestError) => void
 ): void {
   if (!isPlainObject(action)) {
@@ -450,33 +450,33 @@ function validateAction(
     });
   }
 
-  if (!Array.isArray(a.capabilities)) {
+  if (!Array.isArray(a.permissions)) {
     push({
-      code: 'action.capabilities.type',
-      where: `${where}.capabilities`,
-      expected: 'array of capability ids',
-      actual: typeOf(a.capabilities),
-      fixHint: 'List the capability ids this action may use (use [] for pure actions).',
+      code: 'action.permissions.type',
+      where: `${where}.permissions`,
+      expected: 'array of permission ids',
+      actual: typeOf(a.permissions),
+      fixHint: 'List the permission ids this action may use (use [] for pure actions).',
     });
   } else {
-    a.capabilities.forEach((capId, i) => {
-      if (typeof capId !== 'string') {
+    a.permissions.forEach((permId, i) => {
+      if (typeof permId !== 'string') {
         push({
-          code: 'action.capability_ref.type',
-          where: `${where}.capabilities[${i}]`,
+          code: 'action.permission_ref.type',
+          where: `${where}.permissions[${i}]`,
           expected: 'string',
-          actual: typeOf(capId),
-          fixHint: 'Each entry must be a capability id declared in $.capabilities.',
+          actual: typeOf(permId),
+          fixHint: 'Each entry must be a permission id declared in $.permissions.',
         });
         return;
       }
-      if (!capabilityIds.has(capId)) {
+      if (!permissionIds.has(permId)) {
         push({
-          code: 'action.capability_ref.unknown',
-          where: `${where}.capabilities[${i}]`,
-          expected: 'a capability id declared in $.capabilities',
-          actual: `"${capId}"`,
-          fixHint: `Declare a capability with id "${capId}" or remove this reference.`,
+          code: 'action.permission_ref.unknown',
+          where: `${where}.permissions[${i}]`,
+          expected: 'a permission id declared in $.permissions',
+          actual: `"${permId}"`,
+          fixHint: `Declare a permission with id "${permId}" or remove this reference.`,
         });
       }
     });

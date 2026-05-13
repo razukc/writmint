@@ -208,7 +208,7 @@ function wrapForRecord(base: HostTransports, entries: BrokerCallEntry[]): HostTr
       entries.push({
         index: idx,
         kind: 'audit.emit',
-        input: { capabilityId: event.capabilityId, name: event.name, payload: event.payload },
+        input: { permissionId: event.permissionId, name: event.name, payload: event.payload },
         output: undefined,
         threw: false,
       });
@@ -297,7 +297,7 @@ function buildReplayTransports(
   const audit: AuditTransport = {
     emit(event) {
       next('audit.emit', {
-        capabilityId: event.capabilityId,
+        permissionId: event.permissionId,
         name: event.name,
         payload: event.payload,
       });

@@ -12,11 +12,11 @@ import { formatStructuredError, type StructuredError } from './errors.js';
 
 export type { StructuredError };
 
-export class CapabilityError extends Error {
+export class PermissionError extends Error {
   readonly structured: StructuredError;
   constructor(structured: StructuredError) {
     super(formatStructuredError(structured));
-    this.name = 'CapabilityError';
+    this.name = 'PermissionError';
     this.structured = structured;
   }
 }
@@ -35,12 +35,12 @@ export interface NetworkResponse {
 }
 
 export interface NetworkBroker {
-  readonly capabilityId: PermissionId;
+  readonly permissionId: PermissionId;
   request(input: NetworkRequest): Promise<NetworkResponse>;
 }
 
 export interface StorageBroker {
-  readonly capabilityId: PermissionId;
+  readonly permissionId: PermissionId;
   readonly mode: StorageMode;
   get(key: string): Promise<unknown>;
   put(key: string, value: unknown): Promise<void>;
@@ -49,18 +49,18 @@ export interface StorageBroker {
 }
 
 export interface ClockBroker {
-  readonly capabilityId: PermissionId;
+  readonly permissionId: PermissionId;
   now(): number;
   iso(): string;
 }
 
 export interface AuditBroker {
-  readonly capabilityId: PermissionId;
+  readonly permissionId: PermissionId;
   emit(event: string, payload?: unknown): void;
 }
 
 export interface UiBroker {
-  readonly capabilityId: PermissionId;
+  readonly permissionId: PermissionId;
 }
 
 export type Broker =
@@ -86,7 +86,7 @@ export interface ClockTransport {
 }
 
 export interface AuditTransport {
-  emit(event: { capabilityId: PermissionId; name: string; payload?: unknown; at: number }): void;
+  emit(event: { permissionId: PermissionId; name: string; payload?: unknown; at: number }): void;
 }
 
 export interface HostTransports {
@@ -110,13 +110,13 @@ export function createPermissionRegistry(
   transports: HostTransports
 ): PermissionRegistry {
   const byId = new Map<PermissionId, Permission>();
-  for (const cap of manifest.capabilities) {
-    byId.set(cap.id, cap);
+  for (const perm of manifest.permissions) {
+    byId.set(perm.id, perm);
   }
 
   const brokers = new Map<PermissionId, Broker>();
-  for (const cap of manifest.capabilities) {
-    brokers.set(cap.id, buildBroker(cap, transports));
+  for (const perm of manifest.permissions) {
+    brokers.set(perm.id, buildBroker(perm, transports));
   }
 
   const actionsById = new Map<string, ActionManifest>();
@@ -126,23 +126,23 @@ export function createPermissionRegistry(
     forAction(actionId: string): ActionPermissionScope {
       const action = actionsById.get(actionId);
       if (!action) {
-        throw new CapabilityError({
-          code: 'capability.action.unknown',
+        throw new PermissionError({
+          code: 'permission.action.unknown',
           where: `manifest.actions[id=${actionId}]`,
           expected: 'a declared action id',
           actual: actionId,
-          fixHint: 'Only actions declared in the manifest can request capabilities.',
+          fixHint: 'Only actions declared in the manifest can request permissions.',
         });
       }
-      const allowed = new Set(action.capabilities);
+      const allowed = new Set(action.permissions);
       for (const ref of allowed) {
         if (!byId.has(ref)) {
-          throw new CapabilityError({
-            code: 'capability.action.unknown_ref',
-            where: `manifest.actions[id=${actionId}].capabilities`,
-            expected: 'a capability id declared in $.capabilities',
+          throw new PermissionError({
+            code: 'permission.action.unknown_ref',
+            where: `manifest.actions[id=${actionId}].permissions`,
+            expected: 'a permission id declared in $.permissions',
             actual: ref,
-            fixHint: `Declare a capability with id "${ref}" or remove the reference.`,
+            fixHint: `Declare a permission with id "${ref}" or remove the reference.`,
           });
         }
       }
@@ -153,31 +153,31 @@ export function createPermissionRegistry(
         },
         cap(id: PermissionId): Broker {
           if (!byId.has(id)) {
-            throw new CapabilityError({
-              code: 'capability.undeclared',
+            throw new PermissionError({
+              code: 'permission.undeclared',
               where: `action[${actionId}].cap("${id}")`,
-              expected: 'a capability declared on the manifest',
+              expected: 'a permission declared on the manifest',
               actual: `unknown id "${id}"`,
-              fixHint: `Add a capability with id "${id}" to the manifest, or use a declared one.`,
+              fixHint: `Add a permission with id "${id}" to the manifest, or use a declared one.`,
             });
           }
           if (!allowed.has(id)) {
-            throw new CapabilityError({
-              code: 'capability.denied',
+            throw new PermissionError({
+              code: 'permission.denied',
               where: `action[${actionId}].cap("${id}")`,
-              expected: `capability "${id}" declared on this action`,
-              actual: `not in action.capabilities = [${[...allowed].join(', ') || 'none'}]`,
-              fixHint: `Add "${id}" to action "${actionId}".capabilities, or call this from a different action.`,
+              expected: `permission "${id}" declared on this action`,
+              actual: `not in action.permissions = [${[...allowed].join(', ') || 'none'}]`,
+              fixHint: `Add "${id}" to action "${actionId}".permissions, or call this from a different action.`,
             });
           }
           const broker = brokers.get(id);
           if (!broker) {
-            throw new CapabilityError({
-              code: 'capability.no_broker',
+            throw new PermissionError({
+              code: 'permission.no_broker',
               where: `action[${actionId}].cap("${id}")`,
-              expected: 'a broker for this capability',
+              expected: 'a broker for this permission',
               actual: 'no broker registered',
-              fixHint: 'A host transport for this capability type was not provided to the runtime.',
+              fixHint: 'A host transport for this permission type was not provided to the runtime.',
             });
           }
           return broker;
@@ -187,31 +187,31 @@ export function createPermissionRegistry(
   };
 }
 
-function buildBroker(cap: Permission, transports: HostTransports): Broker {
-  switch (cap.type) {
+function buildBroker(perm: Permission, transports: HostTransports): Broker {
+  switch (perm.type) {
     case 'network':
-      return buildNetworkBroker(cap, transports.network);
+      return buildNetworkBroker(perm, transports.network);
     case 'storage':
-      return buildStorageBroker(cap, transports.storage);
+      return buildStorageBroker(perm, transports.storage);
     case 'clock':
-      return buildClockBroker(cap, transports.clock);
+      return buildClockBroker(perm, transports.clock);
     case 'audit':
-      return buildAuditBroker(cap, transports.audit);
+      return buildAuditBroker(perm, transports.audit);
     case 'ui':
-      return { capabilityId: cap.id } satisfies UiBroker;
+      return { permissionId: perm.id } satisfies UiBroker;
   }
 }
 
-function buildNetworkBroker(cap: NetworkPermission, transport?: NetworkTransport): NetworkBroker {
-  const allowedHosts = new Set(cap.hosts);
-  const allowedMethods = cap.methods ? new Set(cap.methods) : null;
-  const id = cap.id;
+function buildNetworkBroker(perm: NetworkPermission, transport?: NetworkTransport): NetworkBroker {
+  const allowedHosts = new Set(perm.hosts);
+  const allowedMethods = perm.methods ? new Set(perm.methods) : null;
+  const id = perm.id;
   return {
-    capabilityId: id,
+    permissionId: id,
     async request(input: NetworkRequest): Promise<NetworkResponse> {
       if (!transport) {
-        throw new CapabilityError({
-          code: 'capability.network.no_transport',
+        throw new PermissionError({
+          code: 'permission.network.no_transport',
           where: `cap("${id}").request`,
           expected: 'a network transport provided to the runtime',
           actual: 'undefined',
@@ -220,30 +220,30 @@ function buildNetworkBroker(cap: NetworkPermission, transport?: NetworkTransport
       }
       const host = parseHost(input.url);
       if (host === null) {
-        throw new CapabilityError({
-          code: 'capability.network.bad_url',
+        throw new PermissionError({
+          code: 'permission.network.bad_url',
           where: `cap("${id}").request.url`,
           expected: 'an absolute URL with a host (https://host/path)',
           actual: input.url,
-          fixHint: 'Pass an absolute URL whose host appears in the capability host list.',
+          fixHint: 'Pass an absolute URL whose host appears in the permission host list.',
         });
       }
       if (!allowedHosts.has(host)) {
-        throw new CapabilityError({
-          code: 'capability.network.host_denied',
+        throw new PermissionError({
+          code: 'permission.network.host_denied',
           where: `cap("${id}").request.url`,
           expected: `host in [${[...allowedHosts].join(', ')}]`,
           actual: host,
-          fixHint: `Either change the URL host to a declared one, or add "${host}" to capability "${id}".hosts.`,
+          fixHint: `Either change the URL host to a declared one, or add "${host}" to permission "${id}".hosts.`,
         });
       }
       if (allowedMethods && !allowedMethods.has(input.method)) {
-        throw new CapabilityError({
-          code: 'capability.network.method_denied',
+        throw new PermissionError({
+          code: 'permission.network.method_denied',
           where: `cap("${id}").request.method`,
           expected: `method in [${[...allowedMethods].join(', ')}]`,
           actual: input.method,
-          fixHint: `Use a declared method, or add "${input.method}" to capability "${id}".methods.`,
+          fixHint: `Use a declared method, or add "${input.method}" to permission "${id}".methods.`,
         });
       }
       return transport.request(input);
@@ -251,17 +251,17 @@ function buildNetworkBroker(cap: NetworkPermission, transport?: NetworkTransport
   };
 }
 
-function buildStorageBroker(cap: StoragePermission, transport?: StorageTransport): StorageBroker {
-  const id = cap.id;
-  const scope = cap.scope;
-  const mode = cap.mode;
+function buildStorageBroker(perm: StoragePermission, transport?: StorageTransport): StorageBroker {
+  const id = perm.id;
+  const scope = perm.scope;
+  const mode = perm.mode;
   const canRead = mode === 'read' || mode === 'readwrite';
   const canWrite = mode === 'write' || mode === 'readwrite';
 
   const requireTransport = (): StorageTransport => {
     if (!transport) {
-      throw new CapabilityError({
-        code: 'capability.storage.no_transport',
+      throw new PermissionError({
+        code: 'permission.storage.no_transport',
         where: `cap("${id}")`,
         expected: 'a storage transport provided to the runtime',
         actual: 'undefined',
@@ -272,27 +272,27 @@ function buildStorageBroker(cap: StoragePermission, transport?: StorageTransport
   };
 
   const denyRead = (op: string) => {
-    throw new CapabilityError({
-      code: 'capability.storage.read_denied',
+    throw new PermissionError({
+      code: 'permission.storage.read_denied',
       where: `cap("${id}").${op}`,
       expected: `mode "read" or "readwrite"`,
       actual: `mode "${mode}"`,
-      fixHint: `Capability "${id}" was declared with mode "${mode}"; reads are not permitted.`,
+      fixHint: `Permission "${id}" was declared with mode "${mode}"; reads are not permitted.`,
     });
   };
 
   const denyWrite = (op: string) => {
-    throw new CapabilityError({
-      code: 'capability.storage.write_denied',
+    throw new PermissionError({
+      code: 'permission.storage.write_denied',
       where: `cap("${id}").${op}`,
       expected: `mode "write" or "readwrite"`,
       actual: `mode "${mode}"`,
-      fixHint: `Capability "${id}" was declared with mode "${mode}"; writes are not permitted.`,
+      fixHint: `Permission "${id}" was declared with mode "${mode}"; writes are not permitted.`,
     });
   };
 
   return {
-    capabilityId: id,
+    permissionId: id,
     mode,
     async get(key: string): Promise<unknown> {
       if (!canRead) denyRead('get');
@@ -313,10 +313,10 @@ function buildStorageBroker(cap: StoragePermission, transport?: StorageTransport
   };
 }
 
-function buildClockBroker(cap: Permission, transport?: ClockTransport): ClockBroker {
-  const id = cap.id;
+function buildClockBroker(perm: Permission, transport?: ClockTransport): ClockBroker {
+  const id = perm.id;
   return {
-    capabilityId: id,
+    permissionId: id,
     now(): number {
       if (transport) return transport.now();
       return Date.now();
@@ -328,21 +328,21 @@ function buildClockBroker(cap: Permission, transport?: ClockTransport): ClockBro
   };
 }
 
-function buildAuditBroker(cap: Permission, transport?: AuditTransport): AuditBroker {
-  const id = cap.id;
+function buildAuditBroker(perm: Permission, transport?: AuditTransport): AuditBroker {
+  const id = perm.id;
   return {
-    capabilityId: id,
+    permissionId: id,
     emit(event: string, payload?: unknown): void {
       if (!transport) {
-        throw new CapabilityError({
-          code: 'capability.audit.no_transport',
+        throw new PermissionError({
+          code: 'permission.audit.no_transport',
           where: `cap("${id}").emit`,
           expected: 'an audit transport provided to the runtime',
           actual: 'undefined',
           fixHint: 'Provide HostTransports.audit when constructing the runtime; audit must not be silently dropped.',
         });
       }
-      transport.emit({ capabilityId: id, name: event, payload, at: Date.now() });
+      transport.emit({ permissionId: id, name: event, payload, at: Date.now() });
     },
   };
 }

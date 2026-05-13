@@ -353,7 +353,7 @@ export function buildAuditingTransports({
         capabilityId,
         capabilityVersionHash: versionHash,
         actionId: action,
-        permissionId: ev.capabilityId,
+        permissionId: ev.permissionId,
         kind: 'capability_emit',
         payload: { name: ev.name, payload: redacted },
         approvedBy,

@@ -8,7 +8,7 @@ export const manifest: CapabilityManifest = {
   description:
     'Triage workflow for an analyst reviewing a flagged transaction: pulls the transaction and customer record, account history, and a sanctions/watchlist check; presents a multi-step review screen; writes the analyst decision back to the case management system.',
 
-  capabilities: [
+  permissions: [
     {
       type: 'network',
       id: 'core.transactions',
@@ -123,7 +123,7 @@ export const manifest: CapabilityManifest = {
           },
         },
       },
-      capabilities: ['core.transactions', 'core.account_history', 'tenant.thresholds', 'audit.triage'],
+      permissions: ['core.transactions', 'core.account_history', 'tenant.thresholds', 'audit.triage'],
       handler: 'loadAlert',
       redact: ['customer.taxId', 'customer.dob', 'customer.address', 'customer.email'],
     },
@@ -161,7 +161,7 @@ export const manifest: CapabilityManifest = {
           },
         },
       },
-      capabilities: ['sanctions.watchlist', 'audit.triage'],
+      permissions: ['sanctions.watchlist', 'audit.triage'],
       handler: 'runWatchlistCheck',
       redact: ['counterparty.accountRef'],
     },
@@ -200,7 +200,7 @@ export const manifest: CapabilityManifest = {
           },
         },
       },
-      capabilities: ['cases.write', 'clock.deterministic', 'audit.triage'],
+      permissions: ['cases.write', 'clock.deterministic', 'audit.triage'],
       destructive: true,
       handler: 'submitDecision',
     },
