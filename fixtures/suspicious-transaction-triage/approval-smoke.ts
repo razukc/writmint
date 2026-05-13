@@ -9,12 +9,12 @@ import {
   hashManifest,
 } from '../../src/approval.js';
 import {
-  createFeatureCapabilityRegistry,
+  createPermissionRegistry,
   type HostTransports,
   type NetworkBroker,
   type StorageBroker,
   type AuditBroker,
-} from '../../src/capabilities.js';
+} from '../../src/permissions.js';
 
 type Result = { name: string; ok: boolean; detail: string };
 const results: Result[] = [];
@@ -174,7 +174,7 @@ async function run(): Promise<void> {
     record: apr2,
     sink: sink2,
   });
-  const reg = createFeatureCapabilityRegistry(manifest, auditing);
+  const reg = createPermissionRegistry(manifest, auditing);
   const load = reg.forAction('triage.load_alert');
   const txNet = load.cap('core.transactions') as NetworkBroker;
   await txNet.request({ url: 'https://core-banking.internal/tx/abc', method: 'GET' });

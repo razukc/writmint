@@ -1,12 +1,12 @@
 import { manifest } from './manifest.js';
 import {
-  createFeatureCapabilityRegistry,
+  createPermissionRegistry,
   CapabilityError,
   type HostTransports,
   type NetworkBroker,
   type StorageBroker,
   type AuditBroker,
-} from '../../src/capabilities.js';
+} from '../../src/permissions.js';
 
 type Result = { name: string; ok: boolean; detail: string };
 const results: Result[] = [];
@@ -73,7 +73,7 @@ const transports: HostTransports = {
   },
 };
 
-const reg = createFeatureCapabilityRegistry(manifest, transports);
+const reg = createPermissionRegistry(manifest, transports);
 
 async function run(): Promise<void> {
   const loadAlert = reg.forAction('triage.load_alert');

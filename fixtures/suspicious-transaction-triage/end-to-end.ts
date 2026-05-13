@@ -1,13 +1,13 @@
 import { manifest } from './manifest.js';
-import { validateFeatureManifest } from '../../src/feature-manifest.js';
+import { validateCapabilityManifest } from '../../src/capability-manifest.js';
 import {
-  createFeatureCapabilityRegistry,
+  createPermissionRegistry,
   CapabilityError,
   type HostTransports,
   type NetworkBroker,
   type StorageBroker,
   type AuditBroker,
-} from '../../src/capabilities.js';
+} from '../../src/permissions.js';
 import { record, replay, ReplayDivergenceError } from '../../src/replay.js';
 import { withChaos, ChaosTimeoutError } from './chaos-transport.js';
 import {
@@ -103,7 +103,7 @@ async function runFeature(
   alertId: string,
   decision: 'clear' | 'escalate' | 'block'
 ): Promise<{ caseId: string; watchlistScore: number }> {
-  const reg = createFeatureCapabilityRegistry(manifest, transports);
+  const reg = createPermissionRegistry(manifest, transports);
 
   const load = reg.forAction('triage.load_alert');
   const txNet = load.cap('core.transactions') as NetworkBroker;
@@ -156,7 +156,7 @@ async function runFeatureMutated(
   alertId: string
 ): Promise<unknown> {
   // Same start, but skips the watchlist step entirely — must surface as a divergence on replay.
-  const reg = createFeatureCapabilityRegistry(manifest, transports);
+  const reg = createPermissionRegistry(manifest, transports);
   const load = reg.forAction('triage.load_alert');
   const txNet = load.cap('core.transactions') as NetworkBroker;
   await txNet.request({ url: `https://core-banking.internal/tx/${alertId}`, method: 'GET' });
@@ -188,7 +188,7 @@ async function main(): Promise<void> {
   const banner = (s: string): void => console.log('\n=== ' + s + ' ===');
 
   banner('PHASE A — Manifest validation (Pillar 1)');
-  const validation = validateFeatureManifest(manifest);
+  const validation = validateCapabilityManifest(manifest);
   log(
     'manifest is valid (Pillar 1)',
     validation.valid && validation.errors.length === 0,
@@ -200,7 +200,7 @@ async function main(): Promise<void> {
   const broken = JSON.parse(JSON.stringify(manifest));
   broken.actions[0].capabilities.push('does.not.exist');
   delete broken.implementation;
-  const brokenResult = validateFeatureManifest(broken);
+  const brokenResult = validateCapabilityManifest(broken);
   const codes = new Set(brokenResult.errors.map((e) => e.code));
   log(
     'tampered manifest rejected with structured errors (Pillars 1+3)',
@@ -318,7 +318,7 @@ async function main(): Promise<void> {
   );
 
   // capability denial must be live and structured
-  const reg = createFeatureCapabilityRegistry(manifest, auditing);
+  const reg = createPermissionRegistry(manifest, auditing);
   const load = reg.forAction('triage.load_alert');
   try {
     load.cap('cases.write');

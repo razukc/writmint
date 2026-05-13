@@ -6,7 +6,7 @@ import type {
   AuditTransport,
   NetworkRequest,
   NetworkResponse,
-} from './capabilities.js';
+} from './permissions.js';
 import { formatStructuredError, type StructuredError } from './errors.js';
 
 export type BrokerCallKind =

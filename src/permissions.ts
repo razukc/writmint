@@ -96,19 +96,19 @@ export interface HostTransports {
   audit?: AuditTransport;
 }
 
-export interface ActionCapabilityScope {
+export interface ActionPermissionScope {
   cap(id: PermissionId): Broker;
   has(id: PermissionId): boolean;
 }
 
-export interface FeatureCapabilityRegistry {
-  forAction(actionId: string): ActionCapabilityScope;
+export interface PermissionRegistry {
+  forAction(actionId: string): ActionPermissionScope;
 }
 
-export function createFeatureCapabilityRegistry(
+export function createPermissionRegistry(
   manifest: CapabilityManifest,
   transports: HostTransports
-): FeatureCapabilityRegistry {
+): PermissionRegistry {
   const byId = new Map<PermissionId, Permission>();
   for (const cap of manifest.capabilities) {
     byId.set(cap.id, cap);
@@ -123,7 +123,7 @@ export function createFeatureCapabilityRegistry(
   for (const a of manifest.actions) actionsById.set(a.id, a);
 
   return {
-    forAction(actionId: string): ActionCapabilityScope {
+    forAction(actionId: string): ActionPermissionScope {
       const action = actionsById.get(actionId);
       if (!action) {
         throw new CapabilityError({

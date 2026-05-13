@@ -71,7 +71,7 @@ export type {
 
 // The five pillars
 export * from './capability-manifest.js';
-export * from './capabilities.js';
+export * from './permissions.js';
 export * from './approval.js';
 export * from './replay.js';
 export {
