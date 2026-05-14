@@ -133,10 +133,113 @@ export const STORAGE_MODES: readonly StorageMode[] = ['read', 'write', 'readwrit
 import type { StructuredError } from './errors.js';
 
 export type ManifestError = StructuredError;
+export type ManifestWarning = StructuredError;
 
 export interface ManifestValidationResult {
   valid: boolean;
   errors: ManifestError[];
+}
+
+export interface HardeningResult {
+  errors: ManifestError[];
+  warnings: ManifestWarning[];
+}
+
+const MIN_REASON_WORDS = 5;
+const MIN_DESCRIPTION_WORDS = 5;
+
+function wordCount(s: string): number {
+  return s.split(/\s+/).filter((w) => w.length > 0).length;
+}
+
+export function hardenManifest(m: CapabilityManifest): HardeningResult {
+  const errors: ManifestError[] = [];
+  const warnings: ManifestWarning[] = [];
+
+  m.permissions.forEach((perm, i) => {
+    const where = `$.permissions[${i}]`;
+
+    if (typeof perm.reason === 'string' && wordCount(perm.reason) < MIN_REASON_WORDS) {
+      errors.push({
+        code: 'permission.reason.too_short',
+        where: `${where}.reason`,
+        expected: `reason with at least ${MIN_REASON_WORDS} words`,
+        actual: `${wordCount(perm.reason)} word(s)`,
+        fixHint:
+          'Expand the reason to explain what this permission is used for and which action needs it.',
+      });
+    }
+
+    if (perm.type === 'network') {
+      perm.hosts.forEach((h, hi) => {
+        if (typeof h === 'string' && h.includes('*')) {
+          errors.push({
+            code: 'permission.network.host_wildcard',
+            where: `${where}.hosts[${hi}]`,
+            expected: 'exact hostname (no wildcards)',
+            actual: `"${h}"`,
+            fixHint:
+              'List each allowed hostname explicitly; wildcards make the call surface impossible to audit.',
+          });
+        }
+      });
+    }
+
+    if (perm.type === 'storage') {
+      if (typeof perm.scope === 'string' && perm.scope.includes('*')) {
+        errors.push({
+          code: 'permission.storage.scope_wildcard',
+          where: `${where}.scope`,
+          expected: 'exact scope (no wildcards)',
+          actual: `"${perm.scope}"`,
+          fixHint:
+            'Name the storage scope explicitly; wildcards expand the blast radius beyond what the manifest declares.',
+        });
+      }
+    }
+  });
+
+  m.actions.forEach((action, i) => {
+    if (typeof action.description === 'string' && wordCount(action.description) < MIN_DESCRIPTION_WORDS) {
+      errors.push({
+        code: 'action.description.too_short',
+        where: `$.actions[${i}].description`,
+        expected: `description with at least ${MIN_DESCRIPTION_WORDS} words`,
+        actual: `${wordCount(action.description)} word(s)`,
+        fixHint:
+          'Describe what the action does, what it touches, and any side effects worth flagging to an approver.',
+      });
+    }
+  });
+
+  const referencedBy = new Map<string, string[]>();
+  for (const action of m.actions) {
+    for (const permId of action.permissions) {
+      const list = referencedBy.get(permId) ?? [];
+      list.push(action.id);
+      referencedBy.set(permId, list);
+    }
+  }
+
+  m.permissions.forEach((perm, i) => {
+    const refs = referencedBy.get(perm.id);
+    if (!refs || refs.length === 0) return;
+    if (typeof perm.reason !== 'string') return;
+
+    const mentionsAny = refs.some((actionId) => perm.reason.includes(actionId));
+    if (!mentionsAny) {
+      warnings.push({
+        code: 'permission.reason.no_action_ref',
+        where: `$.permissions[${i}].reason`,
+        expected: `reason mentions at least one of: ${refs.join(', ')}`,
+        actual: `"${perm.reason}"`,
+        fixHint:
+          'Name the action(s) that use this permission so an approver can trace each grant to a caller.',
+      });
+    }
+  });
+
+  return { errors, warnings };
 }
 
 const SEMVER_RE = /^\d+\.\d+\.\d+(?:-[\w.-]+)?(?:\+[\w.-]+)?$/;

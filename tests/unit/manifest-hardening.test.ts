@@ -1,6 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import type { CapabilityManifest } from '../../src/capability-manifest.js';
-import { hardenManifest } from '../../src/manifest-hardening.js';
+import { hardenManifest, type CapabilityManifest } from '../../src/capability-manifest.js';
 
 function baseManifest(overrides: Partial<CapabilityManifest> = {}): CapabilityManifest {
   return {
