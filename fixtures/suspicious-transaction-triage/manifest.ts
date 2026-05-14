@@ -15,7 +15,7 @@ export const manifest: CapabilityManifest = {
       hosts: ['core-banking.internal'],
       methods: ['GET'],
       reason:
-        'Read the flagged transaction and the customer record needed to evaluate it.',
+        'Used by triage.load_alert to read the flagged transaction and the customer record needed to evaluate it.',
     },
     {
       type: 'network',
@@ -23,7 +23,7 @@ export const manifest: CapabilityManifest = {
       hosts: ['core-banking.internal'],
       methods: ['GET'],
       reason:
-        'Read recent account history for the customer to assess whether the flagged transaction is anomalous.',
+        'Used by triage.load_alert to read recent account history and judge whether the flagged transaction is anomalous.',
     },
     {
       type: 'network',
@@ -31,7 +31,7 @@ export const manifest: CapabilityManifest = {
       hosts: ['watchlist.vendor.example.com'],
       methods: ['POST'],
       reason:
-        'Submit the counterparty for a sanctions/watchlist check. Third-party vendor; isolated capability so the call surface is auditable.',
+        'Used by triage.run_watchlist_check to submit the counterparty to a third-party sanctions vendor; isolated so the call surface is auditable.',
     },
     {
       type: 'network',
@@ -39,7 +39,7 @@ export const manifest: CapabilityManifest = {
       hosts: ['cases.internal'],
       methods: ['POST'],
       reason:
-        'Write the analyst decision back to the case-management system of record. Destructive; gated separately at approval time.',
+        'Used by triage.submit_decision to write the analyst decision back to the case-management system; destructive and gated separately at approval time.',
     },
     {
       type: 'storage',
@@ -47,24 +47,24 @@ export const manifest: CapabilityManifest = {
       scope: 'tenant/risk-thresholds',
       mode: 'read',
       reason:
-        'Read tenant-scoped risk thresholds (e.g. high-value cutoff, watchlist score floor) used to label the alert.',
+        'Used by triage.load_alert to read tenant-scoped risk thresholds (high-value cutoff, watchlist score floor) used to label the alert.',
     },
     {
       type: 'ui',
       id: 'review.screen',
-      reason: 'Render the multi-step review screen for the analyst.',
+      reason: 'Render the multi-step review screen for the analyst to walk through.',
     },
     {
       type: 'audit',
       id: 'audit.triage',
       reason:
-        'Emit structured audit events for compliance: every external read, the decision, and the write-back. Required by the regulated-ops compliance regime.',
+        'Used by triage.load_alert, triage.run_watchlist_check, and triage.submit_decision to emit structured audit events for the regulated-ops compliance regime.',
     },
     {
       type: 'clock',
       id: 'clock.deterministic',
       reason:
-        'Stamp decisions with a wall-clock time. Routed through the runtime clock capability so replays are deterministic.',
+        'Used by triage.submit_decision to stamp the analyst decision with a deterministic wall-clock time so replays remain reproducible.',
     },
   ],
 
