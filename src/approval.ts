@@ -1,4 +1,9 @@
-import type { CapabilityManifest, ActionManifest } from './capability-manifest.js';
+import {
+  hardenManifest,
+  type CapabilityManifest,
+  type ActionManifest,
+  type ManifestWarning,
+} from './capability-manifest.js';
 import type {
   HostTransports,
   AuditTransport,
@@ -65,10 +70,18 @@ export interface ApproveInput {
   destructiveApprovedBy?: string;
 }
 
+export interface SubmitResult extends CapabilityRecord {
+  warnings: ManifestWarning[];
+}
+
 export class ApprovalLifecycle {
   constructor(private store: CapabilityStore) {}
 
-  submit(manifest: CapabilityManifest): CapabilityRecord {
+  submit(manifest: CapabilityManifest): SubmitResult {
+    const { errors, warnings } = hardenManifest(manifest);
+    if (errors.length > 0) {
+      throw new ApprovalError(errors[0]);
+    }
     const versionHash = hashManifest(manifest);
     const existing = this.store.get(manifest.id);
     if (existing && (existing.status === 'approved' || existing.status === 'active')) {
@@ -82,7 +95,7 @@ export class ApprovalLifecycle {
           approvedAtHash: null,
         };
         this.store.put(next);
-        return next;
+        return { ...next, warnings };
       }
     }
     const record: CapabilityRecord = {
@@ -94,7 +107,7 @@ export class ApprovalLifecycle {
       approvedAtHash: null,
     };
     this.store.put(record);
-    return record;
+    return { ...record, warnings };
   }
 
   approve(input: ApproveInput): CapabilityRecord {
