@@ -1,7 +1,7 @@
 {
   "name": "writmint",
-  "version": "0.1.0",
-  "description": "An issuance authority for AI-authored features. Declare a feature manifest, scope its capabilities, replay its execution, and require human approval before it runs in production.",
+  "version": "0.2.0",
+  "description": "A verifier for capabilities an author can't author past. Declare a capability manifest, scope its permissions, harden it before approval, replay its execution, and require a hash-bound human approval before it runs.",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -33,14 +33,14 @@
   },
   "keywords": [
     "ai-agents",
-    "feature-manifest",
-    "capability-scoping",
+    "capability-manifest",
+    "permission-scoping",
     "approval-workflow",
+    "manifest-hardening",
     "audit",
     "replay",
     "governance",
     "enterprise",
-    "browser-extension",
     "typescript"
   ],
   "author": {
