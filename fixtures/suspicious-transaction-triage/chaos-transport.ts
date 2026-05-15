@@ -3,7 +3,7 @@ import type {
   NetworkRequest,
   NetworkResponse,
   NetworkTransport,
-} from '../../src/capabilities.js';
+} from '../../src/permissions.js';
 
 export type ChaosFault =
   | { kind: 'timeout'; afterMs: number }

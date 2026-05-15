@@ -1,11 +1,11 @@
 import { manifest } from './manifest.js';
 import {
-  createFeatureCapabilityRegistry,
+  createPermissionRegistry,
   type HostTransports,
   type NetworkBroker,
   type StorageBroker,
   type AuditBroker,
-} from '../../src/capabilities.js';
+} from '../../src/permissions.js';
 import {
   record,
   replay,
@@ -60,7 +60,7 @@ const baseTransports: HostTransports = {
 };
 
 async function runFeatureV1(transports: HostTransports): Promise<{ decision: string }> {
-  const reg = createFeatureCapabilityRegistry(manifest, transports);
+  const reg = createPermissionRegistry(manifest, transports);
 
   const load = reg.forAction('triage.load_alert');
   const txNet = load.cap('core.transactions') as NetworkBroker;
@@ -100,7 +100,7 @@ async function runFeatureV1(transports: HostTransports): Promise<{ decision: str
 async function runFeatureV2_extraCall(transports: HostTransports): Promise<{ decision: string }> {
   // Replays v1 fully, then makes one more call past the end of the recording.
   const result = await runFeatureV1(transports);
-  const reg = createFeatureCapabilityRegistry(manifest, transports);
+  const reg = createPermissionRegistry(manifest, transports);
   const sub = reg.forAction('triage.submit_decision');
   const auditX = sub.cap('audit.triage') as AuditBroker;
   auditX.emit('triage.extra_event', { note: 'beyond-recording' });
@@ -108,7 +108,7 @@ async function runFeatureV2_extraCall(transports: HostTransports): Promise<{ dec
 }
 
 async function runFeatureV2_inputDrift(transports: HostTransports): Promise<{ decision: string }> {
-  const reg = createFeatureCapabilityRegistry(manifest, transports);
+  const reg = createPermissionRegistry(manifest, transports);
   const load = reg.forAction('triage.load_alert');
   const txNet = load.cap('core.transactions') as NetworkBroker;
   await txNet.request({ url: 'https://core-banking.internal/tx/DIFFERENT', method: 'GET' });
@@ -116,7 +116,7 @@ async function runFeatureV2_inputDrift(transports: HostTransports): Promise<{ de
 }
 
 async function runFeatureV2_fewerCalls(transports: HostTransports): Promise<{ decision: string }> {
-  const reg = createFeatureCapabilityRegistry(manifest, transports);
+  const reg = createPermissionRegistry(manifest, transports);
   const load = reg.forAction('triage.load_alert');
   const txNet = load.cap('core.transactions') as NetworkBroker;
   await txNet.request({ url: 'https://core-banking.internal/tx/abc', method: 'GET' });

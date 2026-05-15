@@ -1,12 +1,12 @@
 import { manifest } from './manifest.js';
 import {
-  createFeatureCapabilityRegistry,
-  CapabilityError,
+  createPermissionRegistry,
+  PermissionError,
   type HostTransports,
   type NetworkBroker,
   type StorageBroker,
   type AuditBroker,
-} from '../../src/capabilities.js';
+} from '../../src/permissions.js';
 
 type Result = { name: string; ok: boolean; detail: string };
 const results: Result[] = [];
@@ -20,10 +20,10 @@ async function expectThrows(name: string, fn: () => Promise<unknown> | unknown, 
     await fn();
     check(name, false, `expected throw [${code}], got success`);
   } catch (e) {
-    if (e instanceof CapabilityError && e.structured.code === code) {
+    if (e instanceof PermissionError && e.structured.code === code) {
       check(name, true, `threw [${code}] as expected`);
     } else {
-      const got = e instanceof CapabilityError ? e.structured.code : String(e);
+      const got = e instanceof PermissionError ? e.structured.code : String(e);
       check(name, false, `expected [${code}], got ${got}`);
     }
   }
@@ -34,13 +34,13 @@ async function expectOk(name: string, fn: () => Promise<unknown> | unknown): Pro
     await fn();
     check(name, true, 'ok');
   } catch (e) {
-    const got = e instanceof CapabilityError ? e.structured.code : String(e);
+    const got = e instanceof PermissionError ? e.structured.code : String(e);
     check(name, false, `unexpected throw: ${got}`);
   }
 }
 
 const networkLog: { capabilityHint: string; url: string; method: string }[] = [];
-const auditLog: { capabilityId: string; name: string }[] = [];
+const auditLog: { permissionId: string; name: string }[] = [];
 
 const transports: HostTransports = {
   network: {
@@ -65,7 +65,7 @@ const transports: HostTransports = {
   },
   audit: {
     emit(ev) {
-      auditLog.push({ capabilityId: ev.capabilityId, name: ev.name });
+      auditLog.push({ permissionId: ev.permissionId, name: ev.name });
     },
   },
   clock: {
@@ -73,7 +73,7 @@ const transports: HostTransports = {
   },
 };
 
-const reg = createFeatureCapabilityRegistry(manifest, transports);
+const reg = createPermissionRegistry(manifest, transports);
 
 async function run(): Promise<void> {
   const loadAlert = reg.forAction('triage.load_alert');
@@ -90,7 +90,7 @@ async function run(): Promise<void> {
     async () => {
       loadAlert.cap('sanctions.watchlist');
     },
-    'capability.denied'
+    'permission.denied'
   );
 
   await expectThrows(
@@ -98,7 +98,7 @@ async function run(): Promise<void> {
     async () => {
       loadAlert.cap('cases.write');
     },
-    'capability.denied'
+    'permission.denied'
   );
 
   await expectThrows(
@@ -107,7 +107,7 @@ async function run(): Promise<void> {
       const net = loadAlert.cap('core.account_history') as NetworkBroker;
       await net.request({ url: 'https://elsewhere.internal/anything', method: 'GET' });
     },
-    'capability.network.host_denied'
+    'permission.network.host_denied'
   );
 
   await expectThrows(
@@ -116,7 +116,7 @@ async function run(): Promise<void> {
       const net = watchlist.cap('sanctions.watchlist') as NetworkBroker;
       await net.request({ url: 'https://watchlist.vendor.example.com/check', method: 'GET' });
     },
-    'capability.network.method_denied'
+    'permission.network.method_denied'
   );
 
   await expectOk('watchlist POST allowed', async () => {
@@ -134,7 +134,7 @@ async function run(): Promise<void> {
       const store = loadAlert.cap('tenant.thresholds') as StorageBroker;
       await store.put('high-value', 10000);
     },
-    'capability.storage.write_denied'
+    'permission.storage.write_denied'
   );
 
   await expectOk('storage read-only capability allows reads', async () => {
@@ -152,7 +152,7 @@ async function run(): Promise<void> {
     async () => {
       loadAlert.cap('made.up');
     },
-    'capability.undeclared'
+    'permission.undeclared'
   );
 
   await expectThrows(
@@ -160,7 +160,7 @@ async function run(): Promise<void> {
     async () => {
       reg.forAction('not.a.real.action');
     },
-    'capability.action.unknown'
+    'permission.action.unknown'
   );
 
   await expectOk('submit_decision can write back via cases.write', async () => {

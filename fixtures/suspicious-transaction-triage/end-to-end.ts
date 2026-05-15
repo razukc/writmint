@@ -1,24 +1,24 @@
 import { manifest } from './manifest.js';
-import { validateFeatureManifest } from '../../src/feature-manifest.js';
+import { validateCapabilityManifest } from '../../src/capability-manifest.js';
 import {
-  createFeatureCapabilityRegistry,
-  CapabilityError,
+  createPermissionRegistry,
+  PermissionError,
   type HostTransports,
   type NetworkBroker,
   type StorageBroker,
   type AuditBroker,
-} from '../../src/capabilities.js';
+} from '../../src/permissions.js';
 import { record, replay, ReplayDivergenceError } from '../../src/replay.js';
 import { withChaos, ChaosTimeoutError } from './chaos-transport.js';
 import {
   ApprovalLifecycle,
   ApprovalError,
-  MemoryFeatureStore,
+  MemoryCapabilityStore,
   MemoryAuditSink,
   buildAuditingTransports,
   emitLifecycleEvent,
 } from '../../src/approval.js';
-import type { FeatureRecord } from '../../src/approval.js';
+import type { CapabilityRecord } from '../../src/approval.js';
 
 interface Step {
   name: string;
@@ -103,7 +103,7 @@ async function runFeature(
   alertId: string,
   decision: 'clear' | 'escalate' | 'block'
 ): Promise<{ caseId: string; watchlistScore: number }> {
-  const reg = createFeatureCapabilityRegistry(manifest, transports);
+  const reg = createPermissionRegistry(manifest, transports);
 
   const load = reg.forAction('triage.load_alert');
   const txNet = load.cap('core.transactions') as NetworkBroker;
@@ -156,7 +156,7 @@ async function runFeatureMutated(
   alertId: string
 ): Promise<unknown> {
   // Same start, but skips the watchlist step entirely — must surface as a divergence on replay.
-  const reg = createFeatureCapabilityRegistry(manifest, transports);
+  const reg = createPermissionRegistry(manifest, transports);
   const load = reg.forAction('triage.load_alert');
   const txNet = load.cap('core.transactions') as NetworkBroker;
   await txNet.request({ url: `https://core-banking.internal/tx/${alertId}`, method: 'GET' });
@@ -174,11 +174,11 @@ async function runFeatureMutated(
 }
 
 async function withFreshState(): Promise<{
-  store: MemoryFeatureStore;
+  store: MemoryCapabilityStore;
   sink: MemoryAuditSink;
   lifecycle: ApprovalLifecycle;
 }> {
-  const store = new MemoryFeatureStore();
+  const store = new MemoryCapabilityStore();
   const sink = new MemoryAuditSink();
   const lifecycle = new ApprovalLifecycle(store);
   return { store, sink, lifecycle };
@@ -188,7 +188,7 @@ async function main(): Promise<void> {
   const banner = (s: string): void => console.log('\n=== ' + s + ' ===');
 
   banner('PHASE A — Manifest validation (Pillar 1)');
-  const validation = validateFeatureManifest(manifest);
+  const validation = validateCapabilityManifest(manifest);
   log(
     'manifest is valid (Pillar 1)',
     validation.valid && validation.errors.length === 0,
@@ -198,14 +198,14 @@ async function main(): Promise<void> {
 
   // negative: a tampered manifest must fail with structured errors.
   const broken = JSON.parse(JSON.stringify(manifest));
-  broken.actions[0].capabilities.push('does.not.exist');
+  broken.actions[0].permissions.push('does.not.exist');
   delete broken.implementation;
-  const brokenResult = validateFeatureManifest(broken);
+  const brokenResult = validateCapabilityManifest(broken);
   const codes = new Set(brokenResult.errors.map((e) => e.code));
   log(
     'tampered manifest rejected with structured errors (Pillars 1+3)',
     !brokenResult.valid &&
-      codes.has('action.capability_ref.unknown') &&
+      codes.has('action.permission_ref.unknown') &&
       codes.has('manifest.implementation.type'),
     `codes: ${[...codes].join(', ')}`,
     [1, 3]
@@ -221,7 +221,7 @@ async function main(): Promise<void> {
   } catch (e) {
     log(
       'unsubmitted feature cannot run',
-      e instanceof ApprovalError && e.structured.code === 'approval.unknown_feature',
+      e instanceof ApprovalError && e.structured.code === 'approval.unknown_capability',
       e instanceof ApprovalError ? e.structured.code : String(e),
       [5]
     );
@@ -233,7 +233,7 @@ async function main(): Promise<void> {
   // approver tries with wrong hash
   try {
     lifecycle.approve({
-      featureId: manifest.id,
+      capabilityId: manifest.id,
       versionHash: 'h00000000',
       approvedBy: 'reviewer@bank',
       destructiveApprovedBy: 'compliance@bank',
@@ -251,7 +251,7 @@ async function main(): Promise<void> {
   // approver forgets destructive lane
   try {
     lifecycle.approve({
-      featureId: manifest.id,
+      capabilityId: manifest.id,
       versionHash: submitted.versionHash,
       approvedBy: 'reviewer@bank',
     });
@@ -266,7 +266,7 @@ async function main(): Promise<void> {
   }
 
   const approved = lifecycle.approve({
-    featureId: manifest.id,
+    capabilityId: manifest.id,
     versionHash: submitted.versionHash,
     approvedBy: 'reviewer@bank',
     destructiveApprovedBy: 'compliance@bank',
@@ -318,7 +318,7 @@ async function main(): Promise<void> {
   );
 
   // capability denial must be live and structured
-  const reg = createFeatureCapabilityRegistry(manifest, auditing);
+  const reg = createPermissionRegistry(manifest, auditing);
   const load = reg.forAction('triage.load_alert');
   try {
     load.cap('cases.write');
@@ -326,15 +326,15 @@ async function main(): Promise<void> {
   } catch (e) {
     log(
       'cross-action capability bleed is denied (Pillars 2+3)',
-      e instanceof CapabilityError && e.structured.code === 'capability.denied',
-      e instanceof CapabilityError ? e.structured.code : String(e),
+      e instanceof PermissionError && e.structured.code === 'permission.denied',
+      e instanceof PermissionError ? e.structured.code : String(e),
       [2, 3]
     );
   }
 
   banner('PHASE D — Audit redaction (Pillar 5)');
-  const featureEmits = sink.events.filter((e) => e.kind === 'feature_emit');
-  const alertLoaded = featureEmits.find(
+  const capabilityEmits = sink.events.filter((e) => e.kind === 'capability_emit');
+  const alertLoaded = capabilityEmits.find(
     (e) => (e.payload as { name: string }).name === 'triage.alert_loaded'
   );
   const aPayload = alertLoaded?.payload as
@@ -351,12 +351,12 @@ async function main(): Promise<void> {
 
   const allTagged = sink.events.every(
     (e) =>
-      e.featureId === manifest.id &&
-      e.featureVersionHash === active.versionHash &&
+      e.capabilityId === manifest.id &&
+      e.capabilityVersionHash === active.versionHash &&
       e.approvedBy === 'reviewer@bank' || e.kind === 'lifecycle'
   );
   log(
-    'every audit event carries featureId + versionHash (and approver post-approval)',
+    'every audit event carries capabilityId + versionHash (and approver post-approval)',
     allTagged,
     `${sink.events.length} events`,
     [5]
@@ -430,7 +430,7 @@ async function main(): Promise<void> {
   );
 
   // Old approval is now stale; trying to run any action throws.
-  let staleRecord: FeatureRecord | null = null;
+  let staleRecord: CapabilityRecord | null = null;
   try {
     staleRecord = lifecycle.assertRunnable(manifest.id, manifest.actions[0]);
     log('prior approval becomes stale after manifest change', false, 'no throw', [5]);
@@ -448,7 +448,7 @@ async function main(): Promise<void> {
 
   banner('PHASE G — Revoke kills further runs (Pillar 5)');
   const reApproved = lifecycle.approve({
-    featureId: manifest.id,
+    capabilityId: manifest.id,
     versionHash: reSub.versionHash,
     approvedBy: 'reviewer@bank',
     destructiveApprovedBy: 'compliance@bank',
@@ -471,12 +471,12 @@ async function main(): Promise<void> {
 
   banner('PHASE H — Failure-path correctness with chaos transport (Pillars 2+3+4+5)');
   // Set up: a fresh active feature record + a fresh sink so audit assertions are scoped.
-  const phaseHStore = new MemoryFeatureStore();
+  const phaseHStore = new MemoryCapabilityStore();
   const phaseHSink = new MemoryAuditSink();
   const phaseHLifecycle = new ApprovalLifecycle(phaseHStore);
   const phaseHSubmitted = phaseHLifecycle.submit(manifest);
   phaseHLifecycle.approve({
-    featureId: manifest.id,
+    capabilityId: manifest.id,
     versionHash: phaseHSubmitted.versionHash,
     approvedBy: 'reviewer@bank',
     destructiveApprovedBy: 'compliance@bank',
@@ -518,7 +518,7 @@ async function main(): Promise<void> {
   );
 
   // (b) Auditability — the run that failed produced an audit trail up to the failure point.
-  const phaseHEmits = phaseHSink.events.filter((e) => e.kind === 'feature_emit');
+  const phaseHEmits = phaseHSink.events.filter((e) => e.kind === 'capability_emit');
   const sawAlertLoaded = phaseHEmits.some(
     (e) => (e.payload as { name: string }).name === 'triage.alert_loaded'
   );
@@ -589,7 +589,7 @@ async function main(): Promise<void> {
         captured.push({
           index: idx,
           kind: 'audit.emit',
-          input: { capabilityId: event.capabilityId, name: event.name, payload: event.payload },
+          input: { permissionId: event.permissionId, name: event.name, payload: event.payload },
           output: undefined,
           threw: false,
         });

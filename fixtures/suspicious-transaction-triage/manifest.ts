@@ -1,6 +1,6 @@
-import type { FeatureManifest } from '../../src/feature-manifest.js';
+import type { CapabilityManifest } from '../../src/capability-manifest.js';
 
-export const manifest: FeatureManifest = {
+export const manifest: CapabilityManifest = {
   schemaVersion: 1,
   id: 'ops.fraud.suspicious_transaction_triage',
   version: '0.1.0',
@@ -8,14 +8,14 @@ export const manifest: FeatureManifest = {
   description:
     'Triage workflow for an analyst reviewing a flagged transaction: pulls the transaction and customer record, account history, and a sanctions/watchlist check; presents a multi-step review screen; writes the analyst decision back to the case management system.',
 
-  capabilities: [
+  permissions: [
     {
       type: 'network',
       id: 'core.transactions',
       hosts: ['core-banking.internal'],
       methods: ['GET'],
       reason:
-        'Read the flagged transaction and the customer record needed to evaluate it.',
+        'Used by triage.load_alert to read the flagged transaction and the customer record needed to evaluate it.',
     },
     {
       type: 'network',
@@ -23,7 +23,7 @@ export const manifest: FeatureManifest = {
       hosts: ['core-banking.internal'],
       methods: ['GET'],
       reason:
-        'Read recent account history for the customer to assess whether the flagged transaction is anomalous.',
+        'Used by triage.load_alert to read recent account history and judge whether the flagged transaction is anomalous.',
     },
     {
       type: 'network',
@@ -31,7 +31,7 @@ export const manifest: FeatureManifest = {
       hosts: ['watchlist.vendor.example.com'],
       methods: ['POST'],
       reason:
-        'Submit the counterparty for a sanctions/watchlist check. Third-party vendor; isolated capability so the call surface is auditable.',
+        'Used by triage.run_watchlist_check to submit the counterparty to a third-party sanctions vendor; isolated so the call surface is auditable.',
     },
     {
       type: 'network',
@@ -39,7 +39,7 @@ export const manifest: FeatureManifest = {
       hosts: ['cases.internal'],
       methods: ['POST'],
       reason:
-        'Write the analyst decision back to the case-management system of record. Destructive; gated separately at approval time.',
+        'Used by triage.submit_decision to write the analyst decision back to the case-management system; destructive and gated separately at approval time.',
     },
     {
       type: 'storage',
@@ -47,24 +47,24 @@ export const manifest: FeatureManifest = {
       scope: 'tenant/risk-thresholds',
       mode: 'read',
       reason:
-        'Read tenant-scoped risk thresholds (e.g. high-value cutoff, watchlist score floor) used to label the alert.',
+        'Used by triage.load_alert to read tenant-scoped risk thresholds (high-value cutoff, watchlist score floor) used to label the alert.',
     },
     {
       type: 'ui',
       id: 'review.screen',
-      reason: 'Render the multi-step review screen for the analyst.',
+      reason: 'Render the multi-step review screen for the analyst to walk through.',
     },
     {
       type: 'audit',
       id: 'audit.triage',
       reason:
-        'Emit structured audit events for compliance: every external read, the decision, and the write-back. Required by the regulated-ops compliance regime.',
+        'Used by triage.load_alert, triage.run_watchlist_check, and triage.submit_decision to emit structured audit events for the regulated-ops compliance regime.',
     },
     {
       type: 'clock',
       id: 'clock.deterministic',
       reason:
-        'Stamp decisions with a wall-clock time. Routed through the runtime clock capability so replays are deterministic.',
+        'Used by triage.submit_decision to stamp the analyst decision with a deterministic wall-clock time so replays remain reproducible.',
     },
   ],
 
@@ -123,7 +123,7 @@ export const manifest: FeatureManifest = {
           },
         },
       },
-      capabilities: ['core.transactions', 'core.account_history', 'tenant.thresholds', 'audit.triage'],
+      permissions: ['core.transactions', 'core.account_history', 'tenant.thresholds', 'audit.triage'],
       handler: 'loadAlert',
       redact: ['customer.taxId', 'customer.dob', 'customer.address', 'customer.email'],
     },
@@ -161,7 +161,7 @@ export const manifest: FeatureManifest = {
           },
         },
       },
-      capabilities: ['sanctions.watchlist', 'audit.triage'],
+      permissions: ['sanctions.watchlist', 'audit.triage'],
       handler: 'runWatchlistCheck',
       redact: ['counterparty.accountRef'],
     },
@@ -200,7 +200,7 @@ export const manifest: FeatureManifest = {
           },
         },
       },
-      capabilities: ['cases.write', 'clock.deterministic', 'audit.triage'],
+      permissions: ['cases.write', 'clock.deterministic', 'audit.triage'],
       destructive: true,
       handler: 'submitDecision',
     },
