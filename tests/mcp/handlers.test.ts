@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { validateManifest, hashManifest } from '../../tools/mcp/handlers.js';
+import { validateManifest, hashManifest, submitManifest, approveManifest, auditEvents } from '../../tools/mcp/handlers.js';
 import type { CapabilityManifest } from '../../src/index.js';
 
 const validManifest: CapabilityManifest = {
@@ -64,5 +64,78 @@ describe('hash_manifest handler', () => {
       manifest: { ...validManifest, version: '1.0.1' },
     });
     expect(JSON.parse(a.content[0].text).hash).not.toEqual(JSON.parse(b.content[0].text).hash);
+  });
+});
+
+describe('submit_manifest handler', () => {
+  it('returns state:submitted with hash and warnings for a valid manifest', async () => {
+    const result = await submitManifest({ manifest: validManifest });
+    expect(result.isError).toBeUndefined();
+    const payload = JSON.parse(result.content[0].text);
+    expect(payload.state).toBe('submitted');
+    expect(payload.hash).toBeDefined();
+    expect(payload.manifestId).toBe(validManifest.id);
+    expect(Array.isArray(payload.warnings)).toBe(true);
+  });
+
+  it('returns isError:true with structured error for an invalid manifest', async () => {
+    const bad = {
+      ...validManifest,
+      permissions: [
+        {
+          ...validManifest.permissions[0],
+          reason: 'short', // Too few words for reason
+        },
+      ],
+    };
+    const result = await submitManifest({ manifest: bad as unknown as CapabilityManifest });
+    expect(result.isError).toBe(true);
+    const payload = JSON.parse(result.content[0].text);
+    expect(payload).toHaveProperty('code');
+    expect(payload).toHaveProperty('fixHint');
+  });
+});
+
+describe('approve_manifest handler', () => {
+  it('returns state:approved with hash and manifestId for a valid submission and approval', async () => {
+    const result = await approveManifest({
+      manifest: validManifest,
+      approver: 'alice@example.com',
+    });
+    expect(result.isError).toBeUndefined();
+    const payload = JSON.parse(result.content[0].text);
+    expect(payload.state).toBe('approved');
+    expect(payload.hash).toBeDefined();
+    expect(payload.manifestId).toBe(validManifest.id);
+  });
+
+  it('returns isError:true with structured error for an invalid manifest', async () => {
+    const bad = {
+      ...validManifest,
+      permissions: [
+        {
+          ...validManifest.permissions[0],
+          reason: 'short', // Too few words for reason
+        },
+      ],
+    };
+    const result = await approveManifest({
+      manifest: bad as unknown as CapabilityManifest,
+      approver: 'alice@example.com',
+    });
+    expect(result.isError).toBe(true);
+    const payload = JSON.parse(result.content[0].text);
+    expect(payload).toHaveProperty('code');
+    expect(payload).toHaveProperty('fixHint');
+  });
+});
+
+describe('audit_events handler', () => {
+  it('returns an empty events array for a manifest with no recorded transports', async () => {
+    const result = await auditEvents({ manifest: validManifest });
+    expect(result.isError).toBeUndefined();
+    const payload = JSON.parse(result.content[0].text);
+    expect(Array.isArray(payload.events)).toBe(true);
+    expect(payload.events.length).toBe(0);
   });
 });
