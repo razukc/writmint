@@ -33,6 +33,27 @@ describe('buildSyntheticAction', () => {
     expect(outputs).toHaveLength(3);
   });
 
+  it('handles clock.now (sync number) and audit.emit (sync void)', async () => {
+    const log: string[] = [];
+    const transports: HostTransports = {
+      clock: {
+        now() { log.push('clock:now'); return 1234567890; },
+      },
+      audit: {
+        emit(event) { log.push(`audit:${event.name}`); },
+      },
+    };
+    const action = buildSyntheticAction([
+      { kind: 'clock.now', input: {} },
+      { kind: 'audit.emit', input: { permissionId: 'p1', name: 'test', at: 1234567890 } },
+    ]);
+    const outputs = await action(transports);
+    expect(log).toEqual(['clock:now', 'audit:test']);
+    expect(outputs).toHaveLength(2);
+    expect(outputs[0]).toBe(1234567890); // clock.now's return surfaces in outputs
+    expect(outputs[1]).toBeUndefined();   // audit.emit returns undefined
+  });
+
   it('throws StructuredError on unknown call kind', async () => {
     const action = buildSyntheticAction([
       { kind: 'bogus.kind', input: {} } as unknown as any,
