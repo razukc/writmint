@@ -35,20 +35,13 @@ export async function hashManifest(args: ManifestInput): Promise<CallToolResult>
   });
 }
 
-interface SubmitManifestInput {
-  manifest: CapabilityManifest;
-  configuredBy?: string;
-  note?: string;
-}
+type SubmitManifestInput = ManifestInput;
 
 export async function submitManifest(args: SubmitManifestInput): Promise<CallToolResult> {
   return wrapStructured(async () => {
     const store = new MemoryCapabilityStore();
     const lifecycle = new ApprovalLifecycle(store);
-    const result = lifecycle.submit(args.manifest, {
-      configuredBy: args.configuredBy,
-      note: args.note,
-    });
+    const result = lifecycle.submit(args.manifest);
     return {
       state: result.status,
       hash: result.versionHash,
@@ -62,7 +55,6 @@ interface ApproveManifestInput {
   manifest: CapabilityManifest;
   approver: string;
   destructiveApprovedBy?: string;
-  note?: string;
 }
 
 export async function approveManifest(args: ApproveManifestInput): Promise<CallToolResult> {
@@ -70,9 +62,7 @@ export async function approveManifest(args: ApproveManifestInput): Promise<CallT
     const store = new MemoryCapabilityStore();
     const lifecycle = new ApprovalLifecycle(store);
     // First submit the manifest
-    const submitResult = lifecycle.submit(args.manifest, {
-      note: args.note,
-    });
+    const submitResult = lifecycle.submit(args.manifest);
     // Then approve it
     const approveResult = lifecycle.approve({
       capabilityId: args.manifest.id,
