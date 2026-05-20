@@ -1,3 +1,6 @@
+// Contract: handlers wrap structured errors as `{isError, content}` and rethrow
+// plain Errors so MCP transport surfaces them. The rethrow contract is pinned
+// in tests/mcp/error-wrapping.test.ts (the `rethrows plain Error...` case).
 import { describe, it, expect } from 'vitest';
 import { validateManifest, hashManifest, submitManifest, approveManifest, auditEvents } from '../../tools/mcp/handlers.js';
 import type { CapabilityManifest } from '../../src/index.js';
