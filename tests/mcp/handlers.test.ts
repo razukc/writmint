@@ -212,3 +212,20 @@ describe('replay handler', () => {
     expect(result.isError).toBeUndefined();
   });
 });
+
+describe('format_error handler', () => {
+  it('returns a human-readable single-line representation', async () => {
+    const { formatError } = await import('../../tools/mcp/handlers.js');
+    const result = await formatError({
+      error: {
+        code: 'test.bad',
+        where: 'somewhere',
+        expected: 'good',
+        actual: 'bad',
+        fixHint: 'fix it',
+      },
+    });
+    const payload = JSON.parse(result.content[0].text);
+    expect(payload.formatted).toBe('[test.bad] somewhere: expected good, got bad — fix it');
+  });
+});

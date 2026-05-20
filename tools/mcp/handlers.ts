@@ -11,6 +11,8 @@ import {
   replay as replayPillar,
   ReplayDivergenceError,
   type Recording,
+  formatStructuredError,
+  type StructuredError,
 } from '../../src/index.js';
 import type { HostTransports } from '../../src/permissions.js';
 import { wrapStructured, divergenceToPayload } from './errors.js';
@@ -169,4 +171,14 @@ export async function replay(args: ReplayInput): Promise<CallToolResult> {
       throw err;
     });
   }
+}
+
+interface FormatErrorInput {
+  error: StructuredError;
+}
+
+export async function formatError(args: FormatErrorInput): Promise<CallToolResult> {
+  return wrapStructured(async () => {
+    return { formatted: formatStructuredError(args.error) };
+  });
 }
