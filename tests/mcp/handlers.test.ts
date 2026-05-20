@@ -139,3 +139,76 @@ describe('audit_events handler', () => {
     expect(payload.events.length).toBe(0);
   });
 });
+
+describe('record handler', () => {
+  it('returns recording entries for a sequence of storage calls', async () => {
+    const { record } = await import('../../tools/mcp/handlers.js');
+    const result = await record({
+      manifest: validManifest,
+      actionId: 'noop',
+      input: {},
+      capability_calls: [
+        { kind: 'storage.put', input: { scope: 'cache', key: 'k', value: 'v' } },
+        { kind: 'storage.get', input: { scope: 'cache', key: 'k' } },
+      ],
+    });
+    const payload = JSON.parse(result.content[0].text);
+    expect(payload.recording.entries).toHaveLength(2);
+  });
+});
+
+describe('replay handler', () => {
+  it('returns {result} when replay matches the recording', async () => {
+    const { record, replay } = await import('../../tools/mcp/handlers.js');
+    const recorded = await record({
+      manifest: validManifest,
+      actionId: 'noop',
+      input: {},
+      capability_calls: [
+        { kind: 'storage.put', input: { scope: 'cache', key: 'k', value: 'v' } },
+      ],
+    });
+    const recording = JSON.parse(recorded.content[0].text).recording;
+
+    const result = await replay({
+      manifest: validManifest,
+      actionId: 'noop',
+      input: {},
+      recording,
+      capability_calls: [
+        { kind: 'storage.put', input: { scope: 'cache', key: 'k', value: 'v' } },
+      ],
+    });
+    const payload = JSON.parse(result.content[0].text);
+    expect(payload.result).toBeDefined();
+    expect(payload.divergence).toBeUndefined();
+    expect(result.isError).toBeUndefined();
+  });
+
+  it('returns {divergence} as a non-error result when the recording diverges', async () => {
+    const { record, replay } = await import('../../tools/mcp/handlers.js');
+    const recorded = await record({
+      manifest: validManifest,
+      actionId: 'noop',
+      input: {},
+      capability_calls: [
+        { kind: 'storage.put', input: { scope: 'cache', key: 'a', value: '1' } },
+      ],
+    });
+    const recording = JSON.parse(recorded.content[0].text).recording;
+
+    const result = await replay({
+      manifest: validManifest,
+      actionId: 'noop',
+      input: {},
+      recording,
+      capability_calls: [
+        { kind: 'storage.put', input: { scope: 'cache', key: 'b', value: '2' } },
+      ],
+    });
+    const payload = JSON.parse(result.content[0].text);
+    expect(payload.divergence).toBeDefined();
+    expect(payload.divergence.code).toMatch(/replay/);
+    expect(result.isError).toBeUndefined();
+  });
+});

@@ -7,9 +7,15 @@ import {
   MemoryAuditSink,
   type CapabilityManifest,
   type AuditEvent,
+  record as recordPillar,
+  replay as replayPillar,
+  ReplayDivergenceError,
+  type Recording,
 } from '../../src/index.js';
-import { wrapStructured } from './errors.js';
+import type { HostTransports } from '../../src/permissions.js';
+import { wrapStructured, divergenceToPayload } from './errors.js';
 import type { CallToolResult } from './errors.js';
+import { buildSyntheticAction, type SyntheticCall } from './synthetic-action.js';
 
 interface ManifestInput {
   manifest: CapabilityManifest;
@@ -87,4 +93,80 @@ export async function auditEvents(args: AuditEventsInput): Promise<CallToolResul
     const sink = new MemoryAuditSink();
     return { events: sink.events as AuditEvent[] };
   });
+}
+
+interface RecordInput {
+  manifest: CapabilityManifest;
+  actionId: string;
+  input: unknown;
+  capability_calls: SyntheticCall[];
+}
+
+interface ReplayInput extends RecordInput {
+  recording: Recording;
+}
+
+function inMemoryTransports(): HostTransports {
+  const store = new Map<string, unknown>();
+  return {
+    storage: {
+      async get(scope, key) {
+        return store.get(`${scope}:${key}`);
+      },
+      async put(scope, key, value) {
+        store.set(`${scope}:${key}`, value);
+      },
+      async delete(scope, key) {
+        store.delete(`${scope}:${key}`);
+      },
+      async list(scope) {
+        const prefix = `${scope}:`;
+        return Array.from(store.keys())
+          .filter((k) => k.startsWith(prefix))
+          .map((k) => k.slice(prefix.length));
+      },
+    },
+    clock: {
+      now() {
+        return Date.parse('2026-01-01T00:00:00Z');
+      },
+    },
+    audit: {
+      emit() {
+        /* no-op */
+      },
+    },
+  };
+}
+
+export async function record(args: RecordInput): Promise<CallToolResult> {
+  return wrapStructured(async () => {
+    const action = buildSyntheticAction(args.capability_calls);
+    const base = inMemoryTransports();
+    const { output, recording } = await recordPillar(base, action);
+    return { result: output, recording };
+  });
+}
+
+export async function replay(args: ReplayInput): Promise<CallToolResult> {
+  // Replay divergence is a FINDING (returned as successful result), not an exception.
+  try {
+    const action = buildSyntheticAction(args.capability_calls);
+    const { output } = await replayPillar(args.recording, action);
+    return {
+      content: [{ type: 'text', text: JSON.stringify({ result: output }) }],
+    };
+  } catch (err) {
+    if (err instanceof ReplayDivergenceError) {
+      return {
+        content: [
+          { type: 'text', text: JSON.stringify({ divergence: divergenceToPayload(err) }) },
+        ],
+      };
+    }
+    // Other structured errors → isError. Plain Error → rethrow.
+    return wrapStructured(async () => {
+      throw err;
+    });
+  }
 }
