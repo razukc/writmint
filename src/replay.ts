@@ -63,6 +63,16 @@ export async function record<T>(
   };
 }
 
+// Recordings cross JSON boundaries (MCP wire, on-disk fixtures). An entry that
+// holds an `undefined`-valued key compares equal in memory but loses the key
+// after JSON round-trip, producing a divergence where `expected` and `actual`
+// stringify identically. Canonicalize through JSON at record time so the
+// in-memory recording matches whatever survives the wire.
+function jsonCanonical<T>(value: T): T {
+  if (value === undefined) return undefined as unknown as T;
+  return JSON.parse(JSON.stringify(value)) as T;
+}
+
 export async function replay<T>(
   recording: Recording,
   fn: (replayed: HostTransports) => Promise<T> | T
@@ -90,13 +100,13 @@ function wrapForRecord(base: HostTransports, entries: BrokerCallEntry[]): HostTr
       const idx = entries.length;
       try {
         const output = await base.network!.request(input);
-        entries.push({ index: idx, kind: 'network.request', input, output, threw: false });
+        entries.push({ index: idx, kind: 'network.request', input: jsonCanonical(input), output: jsonCanonical(output), threw: false });
         return output;
       } catch (e) {
         entries.push({
           index: idx,
           kind: 'network.request',
-          input,
+          input: jsonCanonical(input),
           output: serializeThrown(e),
           threw: true,
         });
@@ -110,7 +120,7 @@ function wrapForRecord(base: HostTransports, entries: BrokerCallEntry[]): HostTr
       const idx = entries.length;
       try {
         const output = await base.storage!.get(scope, key);
-        entries.push({ index: idx, kind: 'storage.get', input: { scope, key }, output, threw: false });
+        entries.push({ index: idx, kind: 'storage.get', input: { scope, key }, output: jsonCanonical(output), threw: false });
         return output;
       } catch (e) {
         entries.push({
@@ -130,7 +140,7 @@ function wrapForRecord(base: HostTransports, entries: BrokerCallEntry[]): HostTr
         entries.push({
           index: idx,
           kind: 'storage.put',
-          input: { scope, key, value },
+          input: { scope, key, value: jsonCanonical(value) },
           output: undefined,
           threw: false,
         });
@@ -138,7 +148,7 @@ function wrapForRecord(base: HostTransports, entries: BrokerCallEntry[]): HostTr
         entries.push({
           index: idx,
           kind: 'storage.put',
-          input: { scope, key, value },
+          input: { scope, key, value: jsonCanonical(value) },
           output: serializeThrown(e),
           threw: true,
         });
@@ -169,12 +179,13 @@ function wrapForRecord(base: HostTransports, entries: BrokerCallEntry[]): HostTr
     },
     async list(scope: string, prefix?: string): Promise<string[]> {
       const idx = entries.length;
+      const input = prefix === undefined ? { scope } : { scope, prefix };
       try {
         const output = await base.storage!.list(scope, prefix);
         entries.push({
           index: idx,
           kind: 'storage.list',
-          input: { scope, prefix },
+          input,
           output,
           threw: false,
         });
@@ -183,7 +194,7 @@ function wrapForRecord(base: HostTransports, entries: BrokerCallEntry[]): HostTr
         entries.push({
           index: idx,
           kind: 'storage.list',
-          input: { scope, prefix },
+          input,
           output: serializeThrown(e),
           threw: true,
         });
@@ -205,10 +216,15 @@ function wrapForRecord(base: HostTransports, entries: BrokerCallEntry[]): HostTr
     emit(event): void {
       const idx = entries.length;
       base.audit!.emit(event);
+      const input: Record<string, unknown> = {
+        permissionId: event.permissionId,
+        name: event.name,
+      };
+      if (event.payload !== undefined) input.payload = jsonCanonical(event.payload);
       entries.push({
         index: idx,
         kind: 'audit.emit',
-        input: { permissionId: event.permissionId, name: event.name, payload: event.payload },
+        input,
         output: undefined,
         threw: false,
       });
@@ -260,7 +276,7 @@ function buildReplayTransports(
 
   const network: NetworkTransport = {
     async request(input: NetworkRequest): Promise<NetworkResponse> {
-      const entry = next('network.request', input);
+      const entry = next('network.request', jsonCanonical(input));
       if (entry.threw) throw rehydrateThrown(entry.output);
       return entry.output as NetworkResponse;
     },
@@ -273,7 +289,7 @@ function buildReplayTransports(
       return entry.output;
     },
     async put(scope, key, value) {
-      const entry = next('storage.put', { scope, key, value });
+      const entry = next('storage.put', { scope, key, value: jsonCanonical(value) });
       if (entry.threw) throw rehydrateThrown(entry.output);
     },
     async delete(scope, key) {
@@ -281,7 +297,8 @@ function buildReplayTransports(
       if (entry.threw) throw rehydrateThrown(entry.output);
     },
     async list(scope, prefix) {
-      const entry = next('storage.list', { scope, prefix });
+      const input = prefix === undefined ? { scope } : { scope, prefix };
+      const entry = next('storage.list', input);
       if (entry.threw) throw rehydrateThrown(entry.output);
       return entry.output as string[];
     },
@@ -296,11 +313,12 @@ function buildReplayTransports(
 
   const audit: AuditTransport = {
     emit(event) {
-      next('audit.emit', {
+      const input: Record<string, unknown> = {
         permissionId: event.permissionId,
         name: event.name,
-        payload: event.payload,
-      });
+      };
+      if (event.payload !== undefined) input.payload = jsonCanonical(event.payload);
+      next('audit.emit', input);
     },
   };
 
