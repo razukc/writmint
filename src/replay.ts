@@ -216,10 +216,9 @@ function wrapForRecord(base: HostTransports, entries: BrokerCallEntry[]): HostTr
     emit(event): void {
       const idx = entries.length;
       base.audit!.emit(event);
-      const input: Record<string, unknown> = {
-        permissionId: event.permissionId,
-        name: event.name,
-      };
+      const input: Record<string, unknown> = {};
+      if (event.permissionId !== undefined) input.permissionId = event.permissionId;
+      if (event.name !== undefined) input.name = event.name;
       if (event.payload !== undefined) input.payload = jsonCanonical(event.payload);
       entries.push({
         index: idx,
@@ -313,10 +312,9 @@ function buildReplayTransports(
 
   const audit: AuditTransport = {
     emit(event) {
-      const input: Record<string, unknown> = {
-        permissionId: event.permissionId,
-        name: event.name,
-      };
+      const input: Record<string, unknown> = {};
+      if (event.permissionId !== undefined) input.permissionId = event.permissionId;
+      if (event.name !== undefined) input.name = event.name;
       if (event.payload !== undefined) input.payload = jsonCanonical(event.payload);
       next('audit.emit', input);
     },

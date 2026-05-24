@@ -47,6 +47,34 @@ describe('replay recordings survive a JSON wire round-trip', () => {
     ).resolves.toMatchObject({ entries: expect.any(Array) });
   });
 
+  it('audit.emit called with a non-envelope payload replays cleanly after JSON round-trip', async () => {
+    // This is the shape the MCP synthetic broker produces when the agent
+    // passes `{kind: "audit.emit", input: <payload-fields>}` — synthetic-action
+    // forwards `input` straight to `t.audit.emit(input)` without wrapping it
+    // in a {permissionId, name, payload} envelope. Result: event.permissionId
+    // and event.name are both undefined.
+    const base = makeAuditTransports();
+    const { recording } = await record(base, async (t) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (t.audit!.emit as unknown as (e: any) => void)({
+        amount: 12500,
+        txn_id: 'txn-0001',
+      });
+    });
+
+    const wired = wireRoundTrip(recording);
+
+    await expect(
+      replay(wired, async (t) => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (t.audit!.emit as unknown as (e: any) => void)({
+          amount: 12500,
+          txn_id: 'txn-0001',
+        });
+      })
+    ).resolves.toMatchObject({ entries: expect.any(Array) });
+  });
+
   it('storage.list with no prefix replays cleanly after JSON round-trip', async () => {
     const store = new Map<string, unknown>();
     const base: HostTransports = {
