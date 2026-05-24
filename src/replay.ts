@@ -323,6 +323,13 @@ function buildReplayTransports(
   return { network, storage, clock, audit };
 }
 
+// JSON-semantic deep equality. Recordings cross JSON boundaries (MCP wire,
+// on-disk fixtures), where `JSON.stringify` drops `undefined`-valued keys. An
+// in-memory `{x: 1, y: undefined}` becomes `{x: 1}` on the wire and `deepEqual`
+// must treat them as equal — otherwise any broker path that builds an input
+// from an optional/default-undefined field diverges after a wire round-trip,
+// with `expected`/`actual` rendering identically (because `stringify` drops
+// undefined the same way) and no actionable signal.
 function deepEqual(a: unknown, b: unknown): boolean {
   if (Object.is(a, b)) return true;
   if (typeof a !== typeof b) return false;
@@ -334,14 +341,24 @@ function deepEqual(a: unknown, b: unknown): boolean {
     for (let i = 0; i < a.length; i++) if (!deepEqual(a[i], b[i])) return false;
     return true;
   }
-  const aKeys = Object.keys(a as Record<string, unknown>).sort();
-  const bKeys = Object.keys(b as Record<string, unknown>).sort();
-  if (aKeys.length !== bKeys.length) return false;
-  for (let i = 0; i < aKeys.length; i++) if (aKeys[i] !== bKeys[i]) return false;
-  for (const k of aKeys) {
+  const aDefined = definedKeys(a as Record<string, unknown>);
+  const bDefined = definedKeys(b as Record<string, unknown>);
+  if (aDefined.length !== bDefined.length) return false;
+  aDefined.sort();
+  bDefined.sort();
+  for (let i = 0; i < aDefined.length; i++) if (aDefined[i] !== bDefined[i]) return false;
+  for (const k of aDefined) {
     if (!deepEqual((a as Record<string, unknown>)[k], (b as Record<string, unknown>)[k])) return false;
   }
   return true;
+}
+
+function definedKeys(o: Record<string, unknown>): string[] {
+  const out: string[] = [];
+  for (const k of Object.keys(o)) {
+    if (o[k] !== undefined) out.push(k);
+  }
+  return out;
 }
 
 function stringify(v: unknown): string {

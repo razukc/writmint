@@ -75,6 +75,49 @@ describe('replay recordings survive a JSON wire round-trip', () => {
     ).resolves.toMatchObject({ entries: expect.any(Array) });
   });
 
+  it('storage.put with undefined key/value replays cleanly after JSON round-trip', async () => {
+    // This is the shape the MCP dogfood agent sent: storage.put called with
+    // scope only, key/value undefined. Recorder stores three keys with two
+    // undefined; JSON drops them on the wire; replay rebuilds three keys.
+    // deepEqual must treat undefined-valued keys as absent for symmetry.
+    const base: HostTransports = {
+      storage: {
+        async get() {
+          return undefined;
+        },
+        async put() {
+          /* no-op */
+        },
+        async delete() {
+          /* no-op */
+        },
+        async list() {
+          return [];
+        },
+      },
+    };
+
+    const { recording } = await record(base, async (t) => {
+      await t.storage!.put(
+        'transactions',
+        undefined as unknown as string,
+        undefined,
+      );
+    });
+
+    const wired = wireRoundTrip(recording);
+
+    await expect(
+      replay(wired, async (t) => {
+        await t.storage!.put(
+          'transactions',
+          undefined as unknown as string,
+          undefined,
+        );
+      })
+    ).resolves.toMatchObject({ entries: expect.any(Array) });
+  });
+
   it('storage.list with no prefix replays cleanly after JSON round-trip', async () => {
     const store = new Map<string, unknown>();
     const base: HostTransports = {
