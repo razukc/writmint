@@ -4,6 +4,36 @@ All notable changes to Writmint will land here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.1] — 2026-05-25
+
+A patch release that closes a replay-divergence bug class surfaced by the
+first dogfood pass through the Writmint MCP server. Recordings cross JSON
+boundaries (MCP wire, on-disk fixtures), where `JSON.stringify` drops
+`undefined`-valued keys. The in-memory `deepEqual` was strict about key
+presence, so any broker call with an undefined optional field (audit.emit
+with no payload, storage.list with no prefix, storage.put with undefined
+key/value, etc.) diverged after a wire round-trip — with `expected` and
+`actual` rendering identically because `stringify` dropped the same keys
+on the display side. Unactionable from the agent's seat.
+
+### Fixed
+
+- `deepEqual` in `src/replay.ts` is now JSON-semantic: undefined-valued
+  keys are treated as absent on both sides, matching what survives the
+  wire. One change at the comparator closes the bug class for every
+  current and future broker path with optional fields.
+- Site-level hardening: `audit.emit` and `storage.list` recorders/replayers
+  now also omit undefined fields before push. This is redundant with the
+  comparator fix but reduces wire payload size and is symmetrical with the
+  shape the comparator expects.
+
+### Added
+
+- `tests/unit/replay-json-stability.test.ts` pins the wire round-trip
+  property for `audit.emit` (no payload), `audit.emit` (non-envelope
+  payload), `storage.put` (undefined key/value), and `storage.list` (no
+  prefix). 775 tests pass; 24 demo assertions still green.
+
 ## [0.2.0] — 2026-05-15
 
 A **breaking** release. The public API splits its vocabulary into an outer
