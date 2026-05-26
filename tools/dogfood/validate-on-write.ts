@@ -3,6 +3,9 @@ import {
   hardenManifest,
   type CapabilityManifest,
 } from '../../src/index.js';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { appendTelemetry } from './telemetry.js';
 
 export interface StructuredErrorLike {
   code: string;
@@ -63,4 +66,41 @@ export function validateProposedManifest(
   }
 
   return { ok: true };
+}
+
+const TELEMETRY_PATH =
+  process.env.WRITMINT_DOGFOOD_TELEMETRY ??
+  'C:/code/playground/extensions/.local/dogfood/writmint-errors.jsonl';
+
+// CLI entry: only runs when invoked directly, not when imported.
+if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
+  const filePath = process.argv[2];
+  if (!filePath) {
+    process.stderr.write('usage: validate-on-write.ts <file-path>\n');
+    process.exit(2);
+  }
+
+  let source: string;
+  try {
+    source = readFileSync(filePath, 'utf8');
+  } catch {
+    // File doesn't exist yet (new write) — nothing to validate, allow.
+    process.exit(0);
+  }
+
+  const result = validateProposedManifest(source, filePath);
+  if (result.ok) {
+    process.exit(0);
+  }
+
+  for (const error of result.errors) {
+    appendTelemetry(TELEMETRY_PATH, {
+      layer: 'hook',
+      code: error.code,
+      where: error.where,
+    });
+  }
+
+  process.stderr.write(JSON.stringify({ errors: result.errors }, null, 2) + '\n');
+  process.exit(1);
 }
