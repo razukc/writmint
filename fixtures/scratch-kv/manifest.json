@@ -1,0 +1,67 @@
+{
+  "schemaVersion": 1,
+  "id": "ops.scratch-kv",
+  "version": "0.1.0",
+  "title": "Scratch KV",
+  "description": "A per-feature scratchpad key-value store with TTL semantics.",
+  "permissions": [
+    {
+      "type": "storage",
+      "id": "store.scratch",
+      "scope": "ops.scratch-kv/entries",
+      "mode": "readwrite",
+      "reason": "Used by `ops.scratch-kv.put` to write entries and by `ops.scratch-kv.get` to read entries."
+    },
+    {
+      "type": "clock",
+      "id": "clock.wall",
+      "reason": "Used by `ops.scratch-kv.put` to stamp expirations and by `ops.scratch-kv.get` to check expiry."
+    }
+  ],
+  "actions": [
+    {
+      "id": "ops.scratch-kv.put",
+      "description": "Store a value at the given key with a TTL in seconds.",
+      "input": {
+        "type": "object",
+        "properties": {
+          "key": { "type": "string" },
+          "value": { "type": "string" },
+          "ttlSeconds": { "type": "number" }
+        },
+        "required": ["key", "value", "ttlSeconds"]
+      },
+      "output": {
+        "type": "object",
+        "properties": {
+          "storedAt": { "type": "number" }
+        }
+      },
+      "permissions": ["store.scratch", "clock.wall"],
+      "handler": "put",
+      "destructive": false
+    },
+    {
+      "id": "ops.scratch-kv.get",
+      "description": "Read a value at the given key, honoring TTL expiry.",
+      "input": {
+        "type": "object",
+        "properties": {
+          "key": { "type": "string" }
+        },
+        "required": ["key"]
+      },
+      "output": {
+        "type": "object",
+        "properties": {
+          "value": { "type": ["string", "null"] },
+          "expired": { "type": "boolean" }
+        }
+      },
+      "permissions": ["store.scratch", "clock.wall"],
+      "handler": "get",
+      "destructive": false
+    }
+  ],
+  "implementation": { "type": "module", "entry": "./impl.js" }
+}
