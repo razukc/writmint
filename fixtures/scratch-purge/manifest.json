@@ -1,0 +1,60 @@
+{
+  "schemaVersion": 1,
+  "id": "ops.scratch-purge",
+  "version": "0.1.0",
+  "title": "Scratchpad Purge",
+  "description": "Admin tool that counts and deletes keys under a scratchpad namespace prefix.",
+  "permissions": [
+    {
+      "type": "storage",
+      "id": "store.scratch",
+      "scope": "ops.scratch-purge/entries",
+      "mode": "readwrite",
+      "reason": "Used by `ops.scratch-purge.count` and `ops.scratch-purge.purge` to read and delete scratchpad keys under the namespace."
+    }
+  ],
+  "actions": [
+    {
+      "id": "ops.scratch-purge.count",
+      "description": "Counts the number of scratchpad keys under the given prefix.",
+      "input": {
+        "type": "object",
+        "properties": {
+          "prefix": { "type": "string" }
+        },
+        "required": ["prefix"]
+      },
+      "output": {
+        "type": "object",
+        "properties": {
+          "count": { "type": "number" }
+        }
+      },
+      "permissions": ["store.scratch"],
+      "handler": "count",
+      "destructive": false
+    },
+    {
+      "id": "ops.scratch-purge.purge",
+      "description": "Deletes every scratchpad key under the given prefix when confirmed.",
+      "input": {
+        "type": "object",
+        "properties": {
+          "prefix": { "type": "string" },
+          "confirm": { "type": "boolean" }
+        },
+        "required": ["prefix", "confirm"]
+      },
+      "output": {
+        "type": "object",
+        "properties": {
+          "deleted": { "type": "number" }
+        }
+      },
+      "permissions": ["store.scratch"],
+      "handler": "purge",
+      "destructive": true
+    }
+  ],
+  "implementation": { "type": "module", "entry": "./impl.js" }
+}
