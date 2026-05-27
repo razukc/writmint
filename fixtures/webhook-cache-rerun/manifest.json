@@ -1,0 +1,47 @@
+{
+  "schemaVersion": 1,
+  "id": "ops.webhook-cache",
+  "version": "0.1.0",
+  "title": "Webhook Cache",
+  "description": "Fetches partner webhook endpoints and caches their responses for replay.",
+  "permissions": [
+    {
+      "type": "network",
+      "id": "net.partner",
+      "hosts": ["hooks.partner.example.com"],
+      "methods": ["GET"],
+      "reason": "Used by `ops.webhook-cache.fetch` to GET the partner webhook endpoint."
+    },
+    {
+      "type": "storage",
+      "id": "store.responses",
+      "scope": "ops.webhook-cache/responses",
+      "mode": "readwrite",
+      "reason": "Used by `ops.webhook-cache.fetch` to persist cached response bodies."
+    }
+  ],
+  "actions": [
+    {
+      "id": "ops.webhook-cache.fetch",
+      "description": "Fetch a partner webhook endpoint and cache the body.",
+      "input": {
+        "type": "object",
+        "properties": {
+          "endpoint": { "type": "string" }
+        },
+        "required": ["endpoint"]
+      },
+      "output": {
+        "type": "object",
+        "properties": {
+          "body": { "type": "string" },
+          "cached": { "type": "boolean" }
+        }
+      },
+      "permissions": ["net.partner", "store.responses"],
+      "handler": "fetchAndCache",
+      "destructive": false
+    }
+  ],
+  "implementation": { "type": "module", "entry": "./impl.js" }
+}
