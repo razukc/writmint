@@ -15,6 +15,8 @@ Anything `validateCapabilityManifest()` or `hardenManifest()` would reject at `s
 
 Files that match the install glob but don't carry any v1 manifest shape marker (`schemaVersion`, `permissions`, `actions`, or `implementation`) are skipped — that's the false-positive defense for repo files (package.json, tsconfig, settings) that happen to be JSON but aren't manifest attempts. A partial/typo'd manifest (e.g. `{ actions: [] }`) still trips the check, so the agent gets feedback on what's missing rather than a silent pass.
 
+Non-JSON files (`.md`, `.ts`, `.tsx`, `.js`, `.mjs`, etc.) bypass JSON.parse entirely via the extension gate, so a markdown write does not emit `manifest.parse_error` telemetry.
+
 ## How it works
 
 Claude Code invokes the hook by piping a JSON event to stdin (no `${file_path}` substitution in the command):

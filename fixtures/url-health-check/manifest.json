@@ -1,0 +1,45 @@
+{
+  "schemaVersion": 1,
+  "id": "ops.url-health-check",
+  "version": "0.1.0",
+  "title": "URL Health Check",
+  "description": "Pings a URL and reports its HTTP status and latency.",
+  "permissions": [
+    {
+      "type": "network",
+      "id": "net.ping",
+      "hosts": ["status.example.com"],
+      "methods": ["GET"],
+      "reason": "Used by `ops.url-health-check.ping` to issue a GET request and measure response latency."
+    },
+    {
+      "type": "clock",
+      "id": "clock.wall",
+      "reason": "Used by `ops.url-health-check.ping` to measure elapsed wall-clock time around the request."
+    }
+  ],
+  "actions": [
+    {
+      "id": "ops.url-health-check.ping",
+      "description": "Issues a GET to the supplied URL and returns status code plus elapsed latency.",
+      "input": {
+        "type": "object",
+        "properties": {
+          "url": { "type": "string" }
+        },
+        "required": ["url"]
+      },
+      "output": {
+        "type": "object",
+        "properties": {
+          "status": { "type": "number" },
+          "latencyMs": { "type": "number" }
+        }
+      },
+      "permissions": ["net.ping", "clock.wall"],
+      "handler": "ping",
+      "destructive": false
+    }
+  ],
+  "implementation": { "type": "module", "entry": "./impl.js" }
+}

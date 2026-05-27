@@ -128,16 +128,38 @@ describe('validateProposedManifest', () => {
     });
   });
 
-  describe('TS inputs', () => {
-    it('returns ok:true silently for TS files (cannot evaluate safely)', () => {
-      const tsSource = `
-        export const manifest = {
-          id: 'feature.foo',
-          capabilities: [],
-        };
-      `;
+  describe('non-JSON extensions (extension gate)', () => {
+    // The extension gate runs BEFORE JSON.parse so non-JSON files never
+    // produce a manifest.parse_error. This guards against the dogfood-pass-01
+    // bug where markdown writes (README.md, SKILL.md, memory files) emitted
+    // structured rejections because parse ran before any shape check.
+
+    it('returns ok:true silently for TS files (parse not attempted)', () => {
+      const tsSource = `export const manifest = { id: 'feature.foo' };`;
       const result = validateProposedManifest(tsSource, 'manifest.ts');
       expect(result.ok).toBe(true);
+    });
+
+    it('returns ok:true silently for markdown files (parse not attempted)', () => {
+      const md = '# Some heading\n\nNot JSON. Parse would fail.';
+      const result = validateProposedManifest(md, 'README.md');
+      expect(result.ok).toBe(true);
+    });
+
+    it('returns ok:true silently for JS files (parse not attempted)', () => {
+      const js = 'module.exports = { foo: 1 }; // not JSON';
+      const result = validateProposedManifest(js, 'script.js');
+      expect(result.ok).toBe(true);
+    });
+
+    it('is case-insensitive on the extension', () => {
+      const result = validateProposedManifest('# heading', 'README.MD');
+      expect(result.ok).toBe(true);
+    });
+
+    it('still validates .json files (the gate does not skip the happy path)', () => {
+      const result = validateProposedManifest(INVALID_MANIFEST, 'manifest.json');
+      expect(result.ok).toBe(false);
     });
   });
 });

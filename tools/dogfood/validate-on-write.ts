@@ -23,8 +23,13 @@ export function validateProposedManifest(
   source: string,
   filePath: string,
 ): ValidateResult {
-  // TS files: cannot evaluate safely — silently pass.
-  if (filePath.endsWith('.ts')) {
+  // Extension gate: only .json / .jsonc files can hold a manifest. Anything
+  // else (.md, .ts, .js, .png, …) gets a silent pass before we even try to
+  // parse — otherwise JSON.parse fails on, say, a markdown write and we
+  // emit a structured rejection for a file that was never a manifest
+  // candidate.
+  const lower = filePath.toLowerCase();
+  if (!lower.endsWith('.json') && !lower.endsWith('.jsonc')) {
     return { ok: true };
   }
 
