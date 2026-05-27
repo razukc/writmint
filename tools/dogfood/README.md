@@ -13,7 +13,7 @@ Anything `validateCapabilityManifest()` or `hardenManifest()` would reject at `s
 - Hardening violations: too-short `reason`/`description`, wildcards in network hosts or storage scopes, etc.
 - Malformed JSON before any of the above can run.
 
-Files that match the install glob but don't have a `capabilities` key are skipped — that's the false-positive defense for repo files that happen to live at a manifest-shaped path but aren't one.
+Files that match the install glob but don't carry any v1 manifest shape marker (`schemaVersion`, `permissions`, `actions`, or `implementation`) are skipped — that's the false-positive defense for repo files (package.json, tsconfig, settings) that happen to be JSON but aren't manifest attempts. A partial/typo'd manifest (e.g. `{ actions: [] }`) still trips the check, so the agent gets feedback on what's missing rather than a silent pass.
 
 ## How it works
 

@@ -45,12 +45,23 @@ export function validateProposedManifest(
     };
   }
 
-  // False-positive defense: file matched the glob but isn't a manifest.
-  if (
-    typeof parsed !== 'object' ||
-    parsed === null ||
-    !('capabilities' in parsed)
-  ) {
+  // False-positive defense: file matched the matcher but isn't a manifest
+  // attempt. We treat the JSON as a manifest attempt if it has *any* of the
+  // shape markers a v1 CapabilityManifest carries: schemaVersion,
+  // permissions, actions, or implementation. Anything else (package.json,
+  // tsconfig, settings.json, random data) gets a silent pass. This catches
+  // partial/typo'd manifests — an agent writing `{ id: "x", actions: [] }`
+  // gets the same structured rejection as one writing a full broken one,
+  // rather than a silent pass that hides the gap.
+  if (typeof parsed !== 'object' || parsed === null) {
+    return { ok: true };
+  }
+  const looksLikeManifest =
+    'schemaVersion' in parsed ||
+    'permissions' in parsed ||
+    'actions' in parsed ||
+    'implementation' in parsed;
+  if (!looksLikeManifest) {
     return { ok: true };
   }
 

@@ -92,10 +92,33 @@ describe('validateProposedManifest', () => {
   });
 
   describe('non-manifest files (false-positive defense)', () => {
-    it('returns ok:true silently when JSON has no capabilities field', () => {
+    it('returns ok:true silently when JSON has no schemaVersion: 1 marker', () => {
       const notAManifest = JSON.stringify({ name: 'something', version: '1' });
       const result = validateProposedManifest(notAManifest, 'manifest.json');
       expect(result.ok).toBe(true);
+    });
+
+    it('returns ok:true silently for JSON with no manifest-shape markers (e.g. a stray { capabilities: [] })', () => {
+      // The exact false-positive shape the user caught in dogfood verify:
+      // `{ "capabilities": [], "id": "" }`. `capabilities` is not a real
+      // v1 manifest field — without schemaVersion/permissions/actions/
+      // implementation, we don't treat the file as a manifest attempt and
+      // pass silently. The OLD discriminator (`'capabilities' in parsed`)
+      // would have validated this, which was a bug: real manifests have
+      // `permissions[]`, not `capabilities[]`, so the OLD logic would
+      // have skipped real manifests and only flagged junk.
+      const notAManifest = JSON.stringify({ capabilities: [], id: '' });
+      const result = validateProposedManifest(notAManifest, 'manifest.json');
+      expect(result.ok).toBe(true);
+    });
+
+    it('treats JSON with any manifest shape marker as a manifest attempt', () => {
+      // Partial / typo'd manifest — agent wrote `actions: []` but forgot
+      // the rest. Catch it and surface what's missing, rather than pass
+      // silently.
+      const partial = JSON.stringify({ actions: [] });
+      const result = validateProposedManifest(partial, 'manifest.json');
+      expect(result.ok).toBe(false);
     });
 
     it('returns ok:true silently when TS source has no capabilities marker', () => {
