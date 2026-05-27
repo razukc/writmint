@@ -1,5 +1,11 @@
-import { describe, it, expect } from 'vitest';
-import { validateProposedManifest } from '../../tools/dogfood/validate-on-write.js';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import {
+  validateProposedManifest,
+  computeProposedContents,
+} from '../../tools/dogfood/validate-on-write.js';
 
 const VALID_MANIFEST = JSON.stringify({
   schemaVersion: 1,
@@ -110,5 +116,94 @@ describe('validateProposedManifest', () => {
       const result = validateProposedManifest(tsSource, 'manifest.ts');
       expect(result.ok).toBe(true);
     });
+  });
+});
+
+describe('computeProposedContents', () => {
+  let dir: string;
+
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), 'writmint-hook-'));
+  });
+
+  afterEach(() => {
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  it('returns Write content verbatim as the proposed source', () => {
+    const result = computeProposedContents({
+      tool_name: 'Write',
+      tool_input: {
+        file_path: join(dir, 'manifest.json'),
+        content: '{"capabilities":[]}',
+      },
+    });
+    expect(result.kind).toBe('validate');
+    if (result.kind === 'validate') {
+      expect(result.source).toBe('{"capabilities":[]}');
+      expect(result.filePath).toBe(join(dir, 'manifest.json'));
+    }
+  });
+
+  it('returns Edit proposed contents by applying the substitution to the on-disk file', () => {
+    const filePath = join(dir, 'manifest.json');
+    writeFileSync(filePath, '{"id":"old","capabilities":[]}', 'utf8');
+
+    const result = computeProposedContents({
+      tool_name: 'Edit',
+      tool_input: {
+        file_path: filePath,
+        old_string: '"id":"old"',
+        new_string: '"id":"new"',
+      },
+    });
+    expect(result.kind).toBe('validate');
+    if (result.kind === 'validate') {
+      expect(result.source).toBe('{"id":"new","capabilities":[]}');
+    }
+  });
+
+  it('returns Edit proposed contents with replace_all when set', () => {
+    const filePath = join(dir, 'manifest.json');
+    writeFileSync(filePath, 'a-a-a', 'utf8');
+
+    const result = computeProposedContents({
+      tool_name: 'Edit',
+      tool_input: {
+        file_path: filePath,
+        old_string: 'a',
+        new_string: 'b',
+        replace_all: true,
+      },
+    });
+    expect(result.kind).toBe('validate');
+    if (result.kind === 'validate') {
+      expect(result.source).toBe('b-b-b');
+    }
+  });
+
+  it('returns skip for tools other than Write/Edit', () => {
+    const result = computeProposedContents({
+      tool_name: 'Bash',
+      tool_input: { file_path: '/whatever' },
+    });
+    expect(result.kind).toBe('skip');
+  });
+
+  it('returns skip when tool_input has no file_path', () => {
+    const result = computeProposedContents({ tool_name: 'Write', tool_input: {} });
+    expect(result.kind).toBe('skip');
+  });
+
+  it('returns skip for Edit when the file does not exist (ENOENT)', () => {
+    const result = computeProposedContents({
+      tool_name: 'Edit',
+      tool_input: {
+        file_path: join(dir, 'does-not-exist.json'),
+        old_string: 'x',
+        new_string: 'y',
+      },
+    });
+    expect(result.kind).toBe('skip');
   });
 });
