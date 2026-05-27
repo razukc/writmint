@@ -185,25 +185,35 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
     process.exit(0);
   }
 
-  if (proposed.kind === 'io_error') {
-    process.stderr.write(
-      JSON.stringify(
-        {
-          errors: [
-            {
-              code: 'hook.io_error',
-              where: proposed.filePath,
-              actual: proposed.message,
-              fixHint:
-                'Hook could not read the file to compute the proposed contents. Check permissions or that the path exists.',
-            },
-          ],
+  // The PreToolUse contract: exit 0 with hookSpecificOutput.permissionDecision
+  // on stdout. "deny" blocks the tool call and surfaces permissionDecisionReason
+  // back to the agent. Exit 1 is treated as non-blocking by Claude Code — that
+  // is the footgun this code was written into originally; do NOT regress.
+  // Reference: https://code.claude.com/docs/en/hooks
+  const emitDeny = (errors: StructuredErrorLike[]): never => {
+    const reason = JSON.stringify({ errors }, null, 2);
+    process.stdout.write(
+      JSON.stringify({
+        hookSpecificOutput: {
+          hookEventName: 'PreToolUse',
+          permissionDecision: 'deny',
+          permissionDecisionReason: reason,
         },
-        null,
-        2,
-      ) + '\n',
+      }) + '\n',
     );
-    process.exit(1);
+    process.exit(0);
+  };
+
+  if (proposed.kind === 'io_error') {
+    emitDeny([
+      {
+        code: 'hook.io_error',
+        where: proposed.filePath,
+        actual: proposed.message,
+        fixHint:
+          'Hook could not read the file to compute the proposed contents. Check permissions or that the path exists.',
+      },
+    ]);
   }
 
   const result = validateProposedManifest(proposed.source, proposed.filePath);
@@ -219,6 +229,5 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
     });
   }
 
-  process.stderr.write(JSON.stringify({ errors: result.errors }, null, 2) + '\n');
-  process.exit(1);
+  emitDeny(result.errors);
 }

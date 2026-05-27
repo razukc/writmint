@@ -31,7 +31,9 @@ Claude Code invokes the hook by piping a JSON event to stdin (no `${file_path}` 
 
 For `Edit` the event carries `old_string` / `new_string` / `replace_all` instead of `content`; the hook reads the file on disk and applies the substitution itself to compute the proposed contents.
 
-The script exits `0` to allow the write, `1` to block. Block writes a structured error array to stderr (Claude Code surfaces it back to the calling agent) and appends one telemetry record per error to the JSONL file.
+The script always exits `0`. On a valid manifest (or non-manifest skip) it prints nothing — Claude Code treats silent exit-0 as "no opinion, proceed." On a block it prints a `hookSpecificOutput` JSON object on stdout with `permissionDecision: "deny"` and the full structured error array as `permissionDecisionReason`. Claude Code surfaces that reason back to the calling agent and refuses the tool call. One telemetry record per error is appended to the JSONL file regardless.
+
+The exit-code path matters. Per the Claude Code hooks docs, **only `exit 2` would block via the exit-code surface — `exit 1` is treated as non-blocking** (the documented footgun). The exit-0 + JSON stdout path is the recommended surface and is what this hook uses.
 
 ## Install
 
