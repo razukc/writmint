@@ -66,6 +66,10 @@ This is much better than the worst-case fail-fast assumption from pass 06's init
 
 **There's still a small leverage opportunity**: combining the stages so a single Write returns both structural and hardening violations in one payload would drop the ceiling from 2 to 1. The trade-off is that hardening checks assume structural validity, so running hardening on a structurally-broken manifest could raise lower-quality errors (e.g. crash trying to inspect `permissions[0].hosts` on a manifest where `permissions` isn't an array). A safer variant: run hardening on the *structurally-valid subtrees* of the manifest, skipping subtrees that failed structural validation. Implementation cost may not be worth the 1-round-trip improvement; logging here as a v0.3 candidate to consider, not adopt.
 
+## No manifest on disk
+
+Both pass 06 and 06b's deliberately-broken manifests were refused at the hook and never landed on disk — corroborating pass 04b's finding that the live gate truly blocks. The empty fixture directories are the evidence.
+
 ## v0.3 candidate (corpus #7)
 
 **Combine structural and hardening into a single error-collection pipeline so a single Write surfaces all violations regardless of which stage they came from.** Optional implementation: run hardening on whichever subtrees survived structural validation. Drops the round-trip ceiling from 2 to 1 for any first-draft manifest. May not be worth the implementation complexity.
