@@ -15,6 +15,8 @@ Two cohorts of four passes each. The first cohort (01-04) ran under a broken hoo
 | 04 | `ops.webhook-cache` | 1 action, network + storage, **deliberate wildcard** | silent | 0 reported, 1 in telemetry, write landed anyway | 0 | 0 | `99204b66…f0968b09` |
 | 04b | `ops.webhook-cache` | (same, deliberate wildcard) | **live** | **1 (gate held; write refused)** | 0 | 0 | `b085e4d4…0c73e68` |
 | 05 | `ops.url-health-check` | (same as 01/01b), **skill disabled** | **live** | **4 round-trips, 16 codes** | 2 (unfixed) | 0 | `e8762610…751b7bcd76` |
+| 06 | `ops.multi-fail-test` | 1 structural + 4 hardening violations | **live** | 1 error in deny payload | — | — | n/a (measurement only, not approved) |
+| 06b | `ops.multi-fail-hardening` | 5 hardening-only violations | **live** | 5 errors in deny payload | — | — | n/a (measurement only) |
 
 ## What we learned
 
@@ -50,6 +52,7 @@ From this dogfood corpus:
 4. **Dynamic-host tension.** Several passes flagged that `hosts[]` is enumerated at author time but actions often take user-supplied URLs. Either per-action `hosts` derived from config, or a separate dynamic-outbound permission type with a different policy.
 5. **Skill should mention the destructive-approve-time consequence.** A line like "if any action sets `destructive: true`, approval requires a second approver string" would prevent the surprise at approve time that submit/validate were silent on.
 6. **Reject unknown fields at the structural validator** (raised by pass 05). The validator currently passes silently on unknown fields (`kind` on permissions, `title` on actions, `additionalProperties: false` on schemas). For an authoring agent, this reads as accepted-and-meaningful when it's accepted-and-ignored. A `manifest.unknown_field` warning or error with `where` pointing at the offending field would close the footgun.
+7. **Combine structural and hardening into one error-collection pipeline** (raised by pass 06/06b). Each stage is internally exhaustive but the pipeline short-circuits between them. A mixed first-draft manifest costs 2 round-trips instead of 1. Optional: run hardening on whichever subtrees survived structural validation. Drops the round-trip ceiling from 2 to 1.
 
 ## Open items for the harness itself
 
