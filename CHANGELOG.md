@@ -4,6 +4,25 @@ All notable changes to Writmint will land here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **`manifest.unknown_field` hardening warning** — `hardenManifest()` now
+  surfaces a structured warning for any field that isn't part of the v1
+  schema at the manifest top-level, inside a permission (canonical key
+  set varies by permission `type`), or inside an action. Surfaced by
+  dogfood pass 05: an agent authoring without the `writmint-authoring`
+  skill shipped a manifest with stray `kind` fields on permissions and a
+  stray `title` field on an action; the validator silently accepted them.
+  Accepted-and-ignored read as accepted-and-meaningful, which is the
+  authoring-time footgun the warning closes. JSONSchema bodies inside
+  `input` / `output` / `config` are not checked — `additionalProperties`
+  and similar are legitimate JSONSchema fields, not Writmint errors.
+  Warning, not error: it's the safer first cut; can be promoted later
+  after the warning has been observed in dogfood for a release. 7 new
+  tests pin the rule (804 total).
+
 ## [0.2.1] — 2026-05-25
 
 A patch release that closes a replay-divergence bug class surfaced by the

@@ -300,3 +300,145 @@ describe('hardenManifest — submit() wiring', () => {
     expect(() => lifecycle.submit(m)).toThrow(ApprovalError);
   });
 });
+
+describe('hardenManifest — manifest.unknown_field', () => {
+  // Raised by dogfood pass 05: agent shipped a manifest with stray fields
+  // (kind on permissions, title on actions, additionalProperties on schemas)
+  // that the validator silently accepted. For an authoring agent, accepted-
+  // and-ignored reads as accepted-and-meaningful. Warning, not error — first
+  // cut surfaces the footgun without breaking carryover manifests.
+
+  it('warns on unknown top-level fields', () => {
+    const m = baseManifest() as CapabilityManifest & Record<string, unknown>;
+    m.author = 'agent';
+    const { warnings } = hardenManifest(m);
+    const w = warnings.find((x) => x.code === 'manifest.unknown_field' && x.where === '$.author');
+    expect(w).toBeDefined();
+    expect(w!.actual).toContain('author');
+  });
+
+  it('warns on unknown fields inside a permission', () => {
+    const m = baseManifest({
+      permissions: [
+        {
+          type: 'network',
+          id: 'net.read',
+          hosts: ['api.example.com'],
+          methods: ['GET'],
+          reason: 'Read example records needed by load action.',
+          // @ts-expect-error stray field
+          kind: 'net.http.get',
+        },
+      ],
+    });
+    const { warnings } = hardenManifest(m);
+    const w = warnings.find(
+      (x) => x.code === 'manifest.unknown_field' && x.where === '$.permissions[0].kind',
+    );
+    expect(w).toBeDefined();
+  });
+
+  it('warns on unknown fields inside an action', () => {
+    const m = baseManifest({
+      actions: [
+        {
+          id: 'example.load',
+          description: 'Load example records from the upstream API.',
+          input: { type: 'object' },
+          output: { type: 'object' },
+          permissions: ['net.read'],
+          handler: 'load',
+          // @ts-expect-error stray field
+          title: 'Load Example Records',
+        },
+      ],
+    });
+    const { warnings } = hardenManifest(m);
+    const w = warnings.find(
+      (x) => x.code === 'manifest.unknown_field' && x.where === '$.actions[0].title',
+    );
+    expect(w).toBeDefined();
+  });
+
+  it('does NOT warn on additionalProperties inside a JSONSchema body', () => {
+    // additionalProperties is a legitimate JSONSchema field; the rule only
+    // applies to manifest structural boundaries, not user-supplied schemas.
+    const m = baseManifest({
+      actions: [
+        {
+          id: 'example.load',
+          description: 'Load example records from the upstream API.',
+          input: {
+            type: 'object',
+            properties: { url: { type: 'string' } },
+            additionalProperties: false,
+          },
+          output: { type: 'object', additionalProperties: false },
+          permissions: ['net.read'],
+          handler: 'load',
+        },
+      ],
+    });
+    const { warnings } = hardenManifest(m);
+    const w = warnings.find((x) => x.code === 'manifest.unknown_field');
+    expect(w).toBeUndefined();
+  });
+
+  it('does NOT warn on canonical top-level fields (no false positives)', () => {
+    const m = baseManifest({
+      config: { apiKey: { type: 'string', description: 'API key' } },
+      screens: [{ id: 's1', title: 'Main', component: 'Main' }],
+      events: { emits: ['loaded'] },
+    });
+    const { warnings } = hardenManifest(m);
+    const w = warnings.find((x) => x.code === 'manifest.unknown_field');
+    expect(w).toBeUndefined();
+  });
+
+  it('does NOT warn on canonical per-permission fields by type', () => {
+    // network has hosts/methods, storage has scope/mode, etc. None of these
+    // should trip the unknown-field warning when used on the right type.
+    const m = baseManifest({
+      permissions: [
+        {
+          type: 'network',
+          id: 'net.read',
+          hosts: ['api.example.com'],
+          methods: ['GET'],
+          reason: 'Read example records needed by load action.',
+        },
+        {
+          type: 'storage',
+          id: 'store.cache',
+          scope: 'cache/items',
+          mode: 'readwrite',
+          reason: 'Cache fetched example records for the load action.',
+        },
+      ],
+      actions: [
+        {
+          id: 'example.load',
+          description: 'Load example records from the upstream API.',
+          input: { type: 'object' },
+          output: { type: 'object' },
+          permissions: ['net.read', 'store.cache'],
+          handler: 'load',
+        },
+      ],
+    });
+    const { warnings } = hardenManifest(m);
+    const w = warnings.find((x) => x.code === 'manifest.unknown_field');
+    expect(w).toBeUndefined();
+  });
+
+  it('warns separately for each stray field (exhaustive within the rule)', () => {
+    const m = baseManifest() as CapabilityManifest & Record<string, unknown>;
+    m.author = 'agent';
+    m.notes = 'whatever';
+    const { warnings } = hardenManifest(m);
+    const matches = warnings.filter((x) => x.code === 'manifest.unknown_field');
+    expect(matches.length).toBe(2);
+    const wheres = matches.map((w) => w.where).sort();
+    expect(wheres).toEqual(['$.author', '$.notes']);
+  });
+});

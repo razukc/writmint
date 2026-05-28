@@ -152,9 +152,83 @@ function wordCount(s: string): number {
   return s.split(/\s+/).filter((w) => w.length > 0).length;
 }
 
+// Canonical key sets for the unknown-field warning. Only structural
+// boundaries (manifest, permissions, actions) are checked; JSONSchema
+// bodies inside input/output/config are left alone because additionalProperties
+// etc. are legitimate JSONSchema fields, not Writmint manifest errors.
+const MANIFEST_KEYS = new Set([
+  'schemaVersion',
+  'id',
+  'version',
+  'title',
+  'description',
+  'permissions',
+  'config',
+  'actions',
+  'screens',
+  'events',
+  'implementation',
+]);
+
+const COMMON_PERMISSION_KEYS = new Set(['type', 'id', 'reason']);
+const PERMISSION_KEYS_BY_TYPE: Record<PermissionType, Set<string>> = {
+  network: new Set([...COMMON_PERMISSION_KEYS, 'hosts', 'methods']),
+  storage: new Set([...COMMON_PERMISSION_KEYS, 'scope', 'mode']),
+  ui: new Set(COMMON_PERMISSION_KEYS),
+  clock: new Set(COMMON_PERMISSION_KEYS),
+  audit: new Set(COMMON_PERMISSION_KEYS),
+};
+
+const ACTION_KEYS = new Set([
+  'id',
+  'description',
+  'input',
+  'output',
+  'permissions',
+  'destructive',
+  'handler',
+  'redact',
+]);
+
+function unknownFieldWarning(where: string, key: string): ManifestWarning {
+  return {
+    code: 'manifest.unknown_field',
+    where,
+    expected: 'one of the canonical fields for this object',
+    actual: `unknown field: ${key}`,
+    fixHint:
+      'Remove the field if it is not part of the v1 schema, or rename it to a canonical one.',
+  };
+}
+
 export function hardenManifest(m: CapabilityManifest): HardeningResult {
   const errors: ManifestError[] = [];
   const warnings: ManifestWarning[] = [];
+
+  for (const key of Object.keys(m)) {
+    if (!MANIFEST_KEYS.has(key)) {
+      warnings.push(unknownFieldWarning(`$.${key}`, key));
+    }
+  }
+
+  m.permissions.forEach((perm, i) => {
+    const allowed = PERMISSION_KEYS_BY_TYPE[perm.type];
+    if (allowed) {
+      for (const key of Object.keys(perm)) {
+        if (!allowed.has(key)) {
+          warnings.push(unknownFieldWarning(`$.permissions[${i}].${key}`, key));
+        }
+      }
+    }
+  });
+
+  m.actions.forEach((action, i) => {
+    for (const key of Object.keys(action)) {
+      if (!ACTION_KEYS.has(key)) {
+        warnings.push(unknownFieldWarning(`$.actions[${i}].${key}`, key));
+      }
+    }
+  });
 
   m.permissions.forEach((perm, i) => {
     const where = `$.permissions[${i}]`;
