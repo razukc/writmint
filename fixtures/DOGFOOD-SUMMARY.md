@@ -14,6 +14,7 @@ Two cohorts of four passes each. The first cohort (01-04) ran under a broken hoo
 | 03b | `ops.scratch-purge` | (same) | **live** | 0 (verified clean) | 0 | 1 (intentional) | `6f9be1b6…6ea03de` |
 | 04 | `ops.webhook-cache` | 1 action, network + storage, **deliberate wildcard** | silent | 0 reported, 1 in telemetry, write landed anyway | 0 | 0 | `99204b66…f0968b09` |
 | 04b | `ops.webhook-cache` | (same, deliberate wildcard) | **live** | **1 (gate held; write refused)** | 0 | 0 | `b085e4d4…0c73e68` |
+| 05 | `ops.url-health-check` | (same as 01/01b), **skill disabled** | **live** | **4 round-trips, 16 codes** | 2 (unfixed) | 0 | `e8762610…751b7bcd76` |
 
 ## What we learned
 
@@ -25,11 +26,11 @@ Two cohorts of four passes each. The first cohort (01-04) ran under a broken hoo
 
 **Pass 04b** is the first dogfood pass in the project's history where the gate is demonstrably live: the wildcard Write was refused, the file was never created, the structured deny payload was visible to the agent as a tool error.
 
-### 2. Under the live gate, the skill carries the load
+### 2. Under the live gate, the skill carries the load — measured
 
 01b, 02b, 03b all produced **zero hook rejections** authoring against the live gate. The result that was ambiguous in 01-03 (skill or silent-gate?) is now load-bearing: the `writmint-authoring` skill prevents malformed writes upstream.
 
-To verify the skill is doing the work (vs. e.g. the structured-error fix-hints being so good that any agent recovers in one round-trip), a future pass should deliberately **disable** the skill and re-author one of these shapes. The expected count is ≥1 rejection per pass; that experiment is not yet run.
+**Pass 05 measures the skill's value directly.** Same target as 01/01b (`ops.url-health-check`), same live gate, skill explicitly disabled (agent forbidden from reading SKILL.md, src/, CLAUDE.md, or fixtures). Result: **4 round-trips, 16 distinct error codes, then accepted.** The skill converts a 4-round-trip recovery loop into a zero-round-trip clean author for this shape. The structured-error contract is robust enough to *recover* from any reasonable prior — every rejection except `host_wildcard` was mechanically fixable from the payload — but the skill is the accelerator that prevents the loop entirely.
 
 ### 3. The approval-layer gate works (and worked even before the hook fix)
 
@@ -48,6 +49,7 @@ From this dogfood corpus:
 3. **MCP response shape inconsistency.** Error path returns a bare error object; success path returns `[{type: "text", ...}]`. Robotic callers have to branch on shape. Standardize.
 4. **Dynamic-host tension.** Several passes flagged that `hosts[]` is enumerated at author time but actions often take user-supplied URLs. Either per-action `hosts` derived from config, or a separate dynamic-outbound permission type with a different policy.
 5. **Skill should mention the destructive-approve-time consequence.** A line like "if any action sets `destructive: true`, approval requires a second approver string" would prevent the surprise at approve time that submit/validate were silent on.
+6. **Reject unknown fields at the structural validator** (raised by pass 05). The validator currently passes silently on unknown fields (`kind` on permissions, `title` on actions, `additionalProperties: false` on schemas). For an authoring agent, this reads as accepted-and-meaningful when it's accepted-and-ignored. A `manifest.unknown_field` warning or error with `where` pointing at the offending field would close the footgun.
 
 ## Open items for the harness itself
 

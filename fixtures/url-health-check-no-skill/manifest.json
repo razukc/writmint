@@ -1,0 +1,52 @@
+{
+  "schemaVersion": 1,
+  "id": "ops.url-health-check",
+  "title": "URL Health Check",
+  "version": "0.1.0",
+  "description": "Health check capability that pings a URL and returns status code and latency.",
+  "implementation": {
+    "type": "module",
+    "entry": "./impl.js"
+  },
+  "permissions": [
+    {
+      "id": "net.get",
+      "type": "network",
+      "kind": "net.http.get",
+      "hosts": ["status.writmint.dev", "health.writmint.dev"],
+      "reason": "Issue an HTTP GET to the user-supplied URL to measure availability."
+    },
+    {
+      "id": "clock",
+      "type": "clock",
+      "kind": "clock.now",
+      "reason": "Measure elapsed time between request start and response."
+    }
+  ],
+  "actions": [
+    {
+      "id": "ops.url-health-check.ping",
+      "title": "Ping URL",
+      "description": "HTTP GET the supplied URL, return status code and elapsed time.",
+      "handler": "ping",
+      "input": {
+        "type": "object",
+        "properties": {
+          "url": { "type": "string" }
+        },
+        "required": ["url"],
+        "additionalProperties": false
+      },
+      "output": {
+        "type": "object",
+        "properties": {
+          "status": { "type": "number" },
+          "latencyMs": { "type": "number" }
+        },
+        "required": ["status", "latencyMs"],
+        "additionalProperties": false
+      },
+      "permissions": ["net.get", "clock"]
+    }
+  ]
+}
