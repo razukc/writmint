@@ -47,7 +47,7 @@ Every rejection captured across both cohorts had the same form: `{code, where, e
 From this dogfood corpus:
 
 1. **`permission.reason.no_action_ref` is too loose.** It accepts a reason naming N-1 of N consuming actions. A stricter `permission.reason.action_ref_incomplete` warning would tighten the forcing function.
-2. **No required-distinct constraint between `approvedBy` and `destructiveApprovedBy`.** Both are free-form strings; an opt-in manifest flag (`approval.requireDistinctApprovers`) plus a new error code `approval.destructive.same_approver` would close the two-person-rule design gap.
+2. ~~**No required-distinct constraint between `approvedBy` and `destructiveApprovedBy`**~~ — **shipped**. `ActionManifest` now carries `requireDistinctDestructiveApprover?: boolean`; setting it true on any destructive action makes `approve()` reject identical `approvedBy` and `destructiveApprovedBy` with `approval.destructive.same_approver`. Opt-in so carryover capabilities still work; per-action so the flag is hash-bound. 9 new approval tests (the gate also had zero prior coverage).
 3. **MCP response shape inconsistency.** Error path returns a bare error object; success path returns `[{type: "text", ...}]`. Robotic callers have to branch on shape. Standardize.
 4. **Dynamic-host tension.** Several passes flagged that `hosts[]` is enumerated at author time but actions often take user-supplied URLs. Either per-action `hosts` derived from config, or a separate dynamic-outbound permission type with a different policy.
 5. **Skill should mention the destructive-approve-time consequence.** A line like "if any action sets `destructive: true`, approval requires a second approver string" would prevent the surprise at approve time that submit/validate were silent on.

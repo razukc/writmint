@@ -21,7 +21,24 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   and similar are legitimate JSONSchema fields, not Writmint errors.
   Warning, not error: it's the safer first cut; can be promoted later
   after the warning has been observed in dogfood for a release. 7 new
-  tests pin the rule (804 total).
+  tests pin the rule.
+
+- **Opt-in two-person rule on destructive approval** — `ActionManifest`
+  now carries an optional `requireDistinctDestructiveApprover: boolean`.
+  When `true` on any destructive action, `approve()` rejects identical
+  `approvedBy` and `destructiveApprovedBy` with the new structured code
+  `approval.destructive.same_approver`. The existing `destructive_required`
+  check still runs first (missing field beats identity check), and a
+  non-destructive action setting the flag is a no-op (`destructive: true`
+  is the trigger, not the flag alone). The flag lives per-action so it
+  is hash-bound — a same-actor approval cannot be done by unflagging
+  post-submit. Surfaced by dogfood pass 03b: `approvedBy` and
+  `destructiveApprovedBy` were both free-form strings with no required-
+  distinct check, so anyone who knew one string knew the other,
+  defeating the point of a two-person gate. Opt-in (not strict by
+  default) so carryover destructive capabilities keep working. 9 new
+  approval tests cover both the existing `destructive_required` gate
+  (no prior coverage) and the new same-approver rule (813 total tests).
 
 ## [0.2.1] — 2026-05-25
 

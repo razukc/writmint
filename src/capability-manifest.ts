@@ -73,6 +73,10 @@ export interface ActionManifest {
   output: JSONSchema;
   permissions: PermissionId[];
   destructive?: boolean;
+  // Opt-in two-person rule: when true on a destructive action, approve()
+  // requires approvedBy and destructiveApprovedBy to be distinct values.
+  // No-op on non-destructive actions.
+  requireDistinctDestructiveApprover?: boolean;
   handler: string;
   redact?: string[];
 }
@@ -186,6 +190,7 @@ const ACTION_KEYS = new Set([
   'output',
   'permissions',
   'destructive',
+  'requireDistinctDestructiveApprover',
   'handler',
   'redact',
 ]);

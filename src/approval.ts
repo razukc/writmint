@@ -142,6 +142,23 @@ export class ApprovalLifecycle {
           'This capability has destructive actions; provide destructiveApprovedBy in addition to approvedBy.',
       });
     }
+    const requiresDistinctApprovers = record.manifest.actions.some(
+      (a) => a.destructive === true && a.requireDistinctDestructiveApprover === true,
+    );
+    if (
+      requiresDistinctApprovers &&
+      input.destructiveApprovedBy &&
+      input.approvedBy === input.destructiveApprovedBy
+    ) {
+      throw new ApprovalError({
+        code: 'approval.destructive.same_approver',
+        where: `capability[${input.capabilityId}].approve`,
+        expected: 'approvedBy and destructiveApprovedBy to be distinct identities',
+        actual: `both set to "${input.approvedBy}"`,
+        fixHint:
+          'A destructive action on this capability opts into the two-person rule; pass a different actor as destructiveApprovedBy.',
+      });
+    }
     const next: CapabilityRecord = {
       ...record,
       status: 'approved',
