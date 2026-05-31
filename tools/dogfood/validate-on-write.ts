@@ -1,8 +1,4 @@
-import {
-  validateCapabilityManifest,
-  hardenManifest,
-  type CapabilityManifest,
-} from '../../src/index.js';
+import { verifyManifest } from '../../src/index.js';
 import { readFileSync, readSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { appendTelemetry } from './telemetry.js';
@@ -70,17 +66,14 @@ export function validateProposedManifest(
     return { ok: true };
   }
 
-  const manifest = parsed as CapabilityManifest;
-  const validation = validateCapabilityManifest(manifest);
-  if (!validation.valid) {
-    return { ok: false, errors: validation.errors as StructuredErrorLike[] };
+  // Run structural + hardening together so a manifest with both kinds of
+  // violations returns all of them in one rejection payload. Pre-verifyManifest
+  // the hook short-circuited between stages, costing 2 round-trips for the
+  // common mixed first-draft. See dogfood pass 06/06b.
+  const result = verifyManifest(parsed);
+  if (!result.valid) {
+    return { ok: false, errors: result.errors as StructuredErrorLike[] };
   }
-
-  const hardening = hardenManifest(manifest);
-  if (hardening.errors.length > 0) {
-    return { ok: false, errors: hardening.errors as StructuredErrorLike[] };
-  }
-
   return { ok: true };
 }
 

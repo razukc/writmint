@@ -1,6 +1,5 @@
 import {
-  validateCapabilityManifest,
-  hardenManifest,
+  verifyManifest,
   hashManifest as hashManifestPillar,
   ApprovalLifecycle,
   MemoryCapabilityStore,
@@ -25,15 +24,15 @@ interface ManifestInput {
 
 export async function validateManifest(args: ManifestInput): Promise<CallToolResult> {
   return wrapStructured(async () => {
-    const validation = validateCapabilityManifest(args.manifest);
-    if (!validation.valid) {
-      return { ok: false, errors: validation.errors };
+    // verifyManifest combines structural + hardening in one pass so a manifest
+    // with both kinds of violations returns the full picture in one round-trip.
+    // Pre-verifyManifest this short-circuited between stages and cost two
+    // round-trips for mixed first-drafts; see dogfood pass 06/06b.
+    const result = verifyManifest(args.manifest);
+    if (!result.valid) {
+      return { ok: false, errors: result.errors };
     }
-    const hardening = hardenManifest(args.manifest);
-    if (hardening.errors.length > 0) {
-      return { ok: false, errors: hardening.errors };
-    }
-    return { ok: true, hardened: { manifest: args.manifest, warnings: hardening.warnings } };
+    return { ok: true, hardened: { manifest: args.manifest, warnings: result.warnings } };
   });
 }
 

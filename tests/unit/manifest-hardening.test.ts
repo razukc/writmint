@@ -299,6 +299,53 @@ describe('hardenManifest — submit() wiring', () => {
     });
     expect(() => lifecycle.submit(m)).toThrow(ApprovalError);
   });
+
+  it('submit() ApprovalError carries every hardening error in allErrors', async () => {
+    // Pre-v0.3.1: submit() exposed only the first hardening error via the
+    // throw. A manifest with multiple hardening violations forced the caller
+    // to fix one, retry, see the next, fix that, retry, etc. — N round-trips
+    // for N errors. allErrors closes that loop: every violation is on the
+    // throw, recoverable in one round-trip.
+    const { ApprovalLifecycle, MemoryCapabilityStore, ApprovalError } = await import(
+      '../../src/approval.js'
+    );
+    const store = new MemoryCapabilityStore();
+    const lifecycle = new ApprovalLifecycle(store);
+    const m = baseManifest({
+      permissions: [
+        {
+          type: 'network',
+          id: 'net.read',
+          hosts: ['*.example.com'],
+          methods: ['GET'],
+          reason: 'short', // permission.reason.too_short
+        },
+      ],
+      actions: [
+        {
+          id: 'do.it',
+          description: 'do', // action.description.too_short
+          input: { type: 'object' },
+          output: { type: 'object' },
+          permissions: ['net.read'],
+          handler: 'run',
+        },
+      ],
+    });
+    try {
+      lifecycle.submit(m);
+      throw new Error('expected submit to throw');
+    } catch (err) {
+      expect(err).toBeInstanceOf(ApprovalError);
+      const ae = err as InstanceType<typeof ApprovalError>;
+      const codes = ae.allErrors.map((e) => e.code);
+      expect(codes).toContain('permission.network.host_wildcard');
+      expect(codes).toContain('permission.reason.too_short');
+      expect(codes).toContain('action.description.too_short');
+      // structured (single) is preserved for backward-compat
+      expect(ae.structured).toBe(ae.allErrors[0]);
+    }
+  });
 });
 
 describe('hardenManifest — manifest.unknown_field', () => {

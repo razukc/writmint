@@ -56,10 +56,20 @@ export class MemoryCapabilityStore implements CapabilityStore {
 
 export class ApprovalError extends Error {
   readonly structured: StructuredError;
-  constructor(structured: StructuredError) {
+  /**
+   * The full set of structured errors that caused this rejection. For most
+   * gates (approval-time checks, lifecycle violations) this is a single entry
+   * matching `structured`. For batch-checking gates like `submit()`, which
+   * runs all hardening rules at once, this carries every violation found in
+   * the manifest — recover off this when present, fall back to `structured`
+   * for the single-error gates.
+   */
+  readonly allErrors: readonly StructuredError[];
+  constructor(structured: StructuredError, allErrors?: readonly StructuredError[]) {
     super(formatStructuredError(structured));
     this.name = 'ApprovalError';
     this.structured = structured;
+    this.allErrors = allErrors ?? [structured];
   }
 }
 
@@ -80,7 +90,11 @@ export class ApprovalLifecycle {
   submit(manifest: CapabilityManifest): SubmitResult {
     const { errors, warnings } = hardenManifest(manifest);
     if (errors.length > 0) {
-      throw new ApprovalError(errors[0]);
+      // Pre v0.3.1, submit() threw on the first error only. Now the throw
+      // still names the first error (preserved as `structured` for backward
+      // compatibility) but carries the full list as `allErrors` so callers
+      // can recover off every violation in one round-trip.
+      throw new ApprovalError(errors[0], errors);
     }
     const versionHash = hashManifest(manifest);
     const existing = this.store.get(manifest.id);

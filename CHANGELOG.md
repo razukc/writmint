@@ -6,6 +6,36 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **`verifyManifest()`** — new combined entry point on
+  `src/capability-manifest.ts` that runs structural validation and
+  hardening in one pass and returns `{ valid, errors, warnings }`.
+  Structural errors mark broken subtrees (e.g. a `permissions[2]` that
+  isn't an object, a non-array `actions`) and hardening skips those
+  subtrees while still running on the rest of the manifest. The dogfood
+  round-trip ceiling for a mixed structural-and-hardening first draft
+  drops from 2 to 1 because every violation surfaces in the first
+  rejection payload. The MCP `validate_manifest` handler and the Layer
+  3 hook script (`tools/dogfood/validate-on-write.ts`) now call
+  `verifyManifest()`; `validateCapabilityManifest()` and
+  `hardenManifest()` are still exported for callers that want each
+  stage separately. `hardenManifest()` grew an optional
+  `{ skipPaths?: ReadonlySet<string> }` second argument so it can be
+  composed cleanly with structural-validation output. Surfaced by
+  dogfood pass 06: a manifest with 1 structural and 4 hardening
+  violations returned 1 error pre-`verifyManifest`; reproducing the
+  same fixture now returns 5. 9 new tests pin the rule.
+
+- **`ApprovalError.allErrors`** — `ApprovalError` carries `readonly
+  allErrors: readonly StructuredError[]` alongside the existing
+  `structured: StructuredError`. `submit()` now populates `allErrors`
+  with every hardening error rather than just the first; existing
+  callers that read `.structured` keep working unchanged because that
+  field still points to the first entry of `allErrors`. Closes the
+  in-stage short-circuit at the `submit()` boundary the same way
+  `verifyManifest()` closes it at the validate-manifest boundary.
+
 ## [0.3.0] — 2026-05-31
 
 A minor release with two pure-additive hardening features, both surfaced

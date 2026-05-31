@@ -142,9 +142,33 @@ export type ManifestWarning = StructuredError;
 export interface ManifestValidationResult {
   valid: boolean;
   errors: ManifestError[];
+  /**
+   * JSON-pointer-style paths whose subtrees were too malformed to be hardened
+   * meaningfully (e.g. a `permissions[i]` that wasn't an object, or a top-level
+   * `actions` that wasn't an array). Consumers running hardening after
+   * structural validation can pass this through `HardenOptions.skipPaths` so
+   * hardening still runs on the rest of the manifest. See `verifyManifest`.
+   */
+  brokenPaths: string[];
 }
 
 export interface HardeningResult {
+  errors: ManifestError[];
+  warnings: ManifestWarning[];
+}
+
+export interface HardenOptions {
+  /**
+   * Skip hardening on these subtree paths. Used by `verifyManifest` to mix
+   * structural and hardening errors in one pass without false positives on
+   * already-broken subtrees. Accepts JSON-pointer-style paths matching
+   * `validateCapabilityManifest`'s `brokenPaths` output.
+   */
+  skipPaths?: ReadonlySet<string>;
+}
+
+export interface ManifestVerificationResult {
+  valid: boolean;
   errors: ManifestError[];
   warnings: ManifestWarning[];
 }
@@ -206,9 +230,25 @@ function unknownFieldWarning(where: string, key: string): ManifestWarning {
   };
 }
 
-export function hardenManifest(m: CapabilityManifest): HardeningResult {
+export function hardenManifest(
+  m: CapabilityManifest,
+  options: HardenOptions = {}
+): HardeningResult {
   const errors: ManifestError[] = [];
   const warnings: ManifestWarning[] = [];
+  const skip = options.skipPaths ?? new Set<string>();
+
+  // Tolerate partial input: when called from verifyManifest after a structural
+  // failure, the runtime shape may not match CapabilityManifest exactly (e.g.
+  // m.permissions might be undefined or not-an-array even though the type says
+  // otherwise). Cast to a loose shape so the checks here never throw on
+  // already-broken input; broken subtrees are skipped via skipPaths.
+  const loose = m as unknown as {
+    permissions?: unknown;
+    actions?: unknown;
+  };
+  const permissionsArr = Array.isArray(loose.permissions) ? (loose.permissions as Permission[]) : [];
+  const actionsArr = Array.isArray(loose.actions) ? (loose.actions as ActionManifest[]) : [];
 
   for (const key of Object.keys(m)) {
     if (!MANIFEST_KEYS.has(key)) {
@@ -216,7 +256,9 @@ export function hardenManifest(m: CapabilityManifest): HardeningResult {
     }
   }
 
-  m.permissions.forEach((perm, i) => {
+  permissionsArr.forEach((perm, i) => {
+    if (skip.has(`$.permissions[${i}]`)) return;
+    if (!perm || typeof perm !== 'object') return;
     const allowed = PERMISSION_KEYS_BY_TYPE[perm.type];
     if (allowed) {
       for (const key of Object.keys(perm)) {
@@ -227,7 +269,9 @@ export function hardenManifest(m: CapabilityManifest): HardeningResult {
     }
   });
 
-  m.actions.forEach((action, i) => {
+  actionsArr.forEach((action, i) => {
+    if (skip.has(`$.actions[${i}]`)) return;
+    if (!action || typeof action !== 'object') return;
     for (const key of Object.keys(action)) {
       if (!ACTION_KEYS.has(key)) {
         warnings.push(unknownFieldWarning(`$.actions[${i}].${key}`, key));
@@ -235,7 +279,9 @@ export function hardenManifest(m: CapabilityManifest): HardeningResult {
     }
   });
 
-  m.permissions.forEach((perm, i) => {
+  permissionsArr.forEach((perm, i) => {
+    if (skip.has(`$.permissions[${i}]`)) return;
+    if (!perm || typeof perm !== 'object') return;
     const where = `$.permissions[${i}]`;
 
     if (typeof perm.reason === 'string' && wordCount(perm.reason) < MIN_REASON_WORDS) {
@@ -278,7 +324,9 @@ export function hardenManifest(m: CapabilityManifest): HardeningResult {
     }
   });
 
-  m.actions.forEach((action, i) => {
+  actionsArr.forEach((action, i) => {
+    if (skip.has(`$.actions[${i}]`)) return;
+    if (!action || typeof action !== 'object') return;
     if (typeof action.description === 'string' && wordCount(action.description) < MIN_DESCRIPTION_WORDS) {
       errors.push({
         code: 'action.description.too_short',
@@ -292,15 +340,21 @@ export function hardenManifest(m: CapabilityManifest): HardeningResult {
   });
 
   const referencedBy = new Map<string, string[]>();
-  for (const action of m.actions) {
+  actionsArr.forEach((action, i) => {
+    if (skip.has(`$.actions[${i}]`)) return;
+    if (!action || typeof action !== 'object') return;
+    if (!Array.isArray(action.permissions)) return;
     for (const permId of action.permissions) {
+      if (typeof permId !== 'string') continue;
       const list = referencedBy.get(permId) ?? [];
       list.push(action.id);
       referencedBy.set(permId, list);
     }
-  }
+  });
 
-  m.permissions.forEach((perm, i) => {
+  permissionsArr.forEach((perm, i) => {
+    if (skip.has(`$.permissions[${i}]`)) return;
+    if (!perm || typeof perm !== 'object') return;
     const refs = referencedBy.get(perm.id);
     if (!refs || refs.length === 0) return;
     if (typeof perm.reason !== 'string') return;
@@ -326,6 +380,7 @@ const ID_RE = /^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$/;
 
 export function validateCapabilityManifest(input: unknown): ManifestValidationResult {
   const errors: ManifestError[] = [];
+  const brokenPaths = new Set<string>();
   const push = (e: ManifestError) => errors.push(e);
 
   if (!isPlainObject(input)) {
@@ -340,6 +395,7 @@ export function validateCapabilityManifest(input: unknown): ManifestValidationRe
           fixHint: 'Provide a CapabilityManifest object.',
         },
       ],
+      brokenPaths: ['$'],
     };
   }
 
@@ -369,8 +425,13 @@ export function validateCapabilityManifest(input: unknown): ManifestValidationRe
       actual: typeOf(m.permissions),
       fixHint: 'Set permissions to an array (use [] if none, but actions cannot reference any).',
     });
+    brokenPaths.add('$.permissions');
   } else {
-    m.permissions.forEach((p, i) => validatePermission(p, `$.permissions[${i}]`, permissionIds, push));
+    m.permissions.forEach((p, i) => {
+      const where = `$.permissions[${i}]`;
+      if (!isPlainObject(p)) brokenPaths.add(where);
+      validatePermission(p, where, permissionIds, push);
+    });
   }
 
   if (m.config !== undefined) {
@@ -398,6 +459,7 @@ export function validateCapabilityManifest(input: unknown): ManifestValidationRe
       actual: typeOf(m.actions),
       fixHint: 'Set actions to an array of ActionManifest entries.',
     });
+    brokenPaths.add('$.actions');
   } else if (m.actions.length === 0) {
     push({
       code: 'manifest.actions.empty',
@@ -407,9 +469,11 @@ export function validateCapabilityManifest(input: unknown): ManifestValidationRe
       fixHint: 'A capability must declare at least one action; otherwise it has no behavior.',
     });
   } else {
-    m.actions.forEach((a, i) =>
-      validateAction(a, `$.actions[${i}]`, actionIds, permissionIds, push)
-    );
+    m.actions.forEach((a, i) => {
+      const where = `$.actions[${i}]`;
+      if (!isPlainObject(a)) brokenPaths.add(where);
+      validateAction(a, where, actionIds, permissionIds, push);
+    });
   }
 
   if (m.screens !== undefined) {
@@ -465,7 +529,36 @@ export function validateCapabilityManifest(input: unknown): ManifestValidationRe
     requireString(impl, 'entry', '$.implementation.entry', push);
   }
 
-  return { valid: errors.length === 0, errors };
+  return { valid: errors.length === 0, errors, brokenPaths: Array.from(brokenPaths) };
+}
+
+/**
+ * Run structural validation and hardening in a single pass, returning the
+ * combined errors and warnings. Hardening runs even when structural fails,
+ * skipping subtrees that structural marked as too broken to harden
+ * meaningfully (e.g. a `permissions[2]` that isn't an object). The result is
+ * `valid: true` only when both stages clear; warnings are surfaced regardless.
+ *
+ * Prefer this over `validateCapabilityManifest` + `hardenManifest` at call
+ * sites that want first-pass exhaustiveness. The dogfood pipeline ceiling
+ * drops from 2 round-trips to 1 for mixed-error manifests.
+ */
+export function verifyManifest(input: unknown): ManifestVerificationResult {
+  const v = validateCapabilityManifest(input);
+  if (!isPlainObject(input)) {
+    return { valid: false, errors: v.errors, warnings: [] };
+  }
+  // Hardening is tolerant of partial shapes (it walks via skipPaths-aware
+  // optional access), so a double-cast is safe here even when structural
+  // failed — broken subtrees are routed around.
+  const h = hardenManifest(input as unknown as CapabilityManifest, {
+    skipPaths: new Set(v.brokenPaths),
+  });
+  return {
+    valid: v.valid && h.errors.length === 0,
+    errors: [...v.errors, ...h.errors],
+    warnings: h.warnings,
+  };
 }
 
 function validatePermission(
