@@ -6,6 +6,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.3.0] — 2026-05-31
+
+A minor release with two pure-additive hardening features, both surfaced
+by the dogfood harness running against the MCP server. No breaking
+changes; existing manifests continue to validate, submit, and approve
+unchanged. The companion `writmint-authoring` skill grew a destructive-
+actions section spelling out the `submit()`-silent / `approve()`-loud
+behavior that pass 03b documented.
+
 ### Added
 
 - **`manifest.unknown_field` hardening warning** — `hardenManifest()` now
@@ -38,7 +47,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   defeating the point of a two-person gate. Opt-in (not strict by
   default) so carryover destructive capabilities keep working. 9 new
   approval tests cover both the existing `destructive_required` gate
-  (no prior coverage) and the new same-approver rule (813 total tests).
+  (no prior coverage) and the new same-approver rule.
+
+### Notes
+
+- 813 tests pass.
+- Pre-stable. Public API surface may still change before v1.0.
+- Requires Node ≥ 22.
+
+[0.3.0]: https://github.com/razukc/writmint/releases/tag/v0.3.0
 
 ## [0.2.1] — 2026-05-25
 
