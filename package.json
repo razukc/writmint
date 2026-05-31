@@ -1,6 +1,6 @@
 {
   "name": "writmint",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "A verifier for capabilities an author can't author past. Declare a capability manifest, scope its permissions, harden it before approval, replay its execution, and require a hash-bound human approval before it runs.",
   "type": "module",
   "main": "dist/index.js",

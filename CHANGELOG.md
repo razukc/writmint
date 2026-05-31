@@ -6,6 +6,22 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.3.1] — 2026-05-31
+
+A patch release that closes the last short-circuit in the authoring
+rejection path. Every Writmint check is internally exhaustive — the
+structural validator collects all errors before returning, hardening
+collects all errors before returning, the unknown-field rule warns on
+every offender — but the *pipeline between stages* was fail-fast. A
+first-draft manifest with one structural error and four hardening
+errors returned one error, forced the agent to fix it, retry, see the
+next four, and pay a second round-trip. v0.3.1 collapses both seams
+(the MCP `validate_manifest` / hook boundary, and the `submit()`
+boundary) so every authoring rejection arrives complete. Pure-additive
+— no breaking changes; existing call sites that use
+`validateCapabilityManifest`, `hardenManifest`, or read
+`ApprovalError.structured` keep working unchanged.
+
 ### Added
 
 - **`verifyManifest()`** — new combined entry point on
@@ -35,6 +51,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   field still points to the first entry of `allErrors`. Closes the
   in-stage short-circuit at the `submit()` boundary the same way
   `verifyManifest()` closes it at the validate-manifest boundary.
+
+### Notes
+
+- 823 tests pass.
+- Pre-stable. Public API surface may still change before v1.0.
+- Requires Node ≥ 22.
+
+[0.3.1]: https://github.com/razukc/writmint/releases/tag/v0.3.1
 
 ## [0.3.0] — 2026-05-31
 
