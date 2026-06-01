@@ -9,6 +9,7 @@ import {
   record as recordPillar,
   replay as replayPillar,
   ReplayDivergenceError,
+  RuntimeError,
   type Recording,
   formatStructuredError,
   type StructuredError,
@@ -28,11 +29,18 @@ export async function validateManifest(args: ManifestInput): Promise<CallToolRes
     // with both kinds of violations returns the full picture in one round-trip.
     // Pre-verifyManifest this short-circuited between stages and cost two
     // round-trips for mixed first-drafts; see dogfood pass 06/06b.
+    //
+    // On failure we THROW a RuntimeError carrying every violation rather
+    // than returning a {ok:false} success-shape from inside this lambda.
+    // wrapStructured then emits isError:true with the tagged-union failure
+    // envelope, matching every other handler. Pre-v0.3.2 this returned a
+    // {ok:false} success which forced callers to branch on inner-text
+    // fields even on a "successful" tool call. See v0.3 candidate #3.
     const result = verifyManifest(args.manifest);
     if (!result.valid) {
-      return { ok: false, errors: result.errors };
+      throw new RuntimeError(result.errors[0]!, result.errors);
     }
-    return { ok: true, hardened: { manifest: args.manifest, warnings: result.warnings } };
+    return { hardened: { manifest: args.manifest, warnings: result.warnings } };
   });
 }
 
@@ -150,26 +158,25 @@ export async function record(args: RecordInput): Promise<CallToolResult> {
 }
 
 export async function replay(args: ReplayInput): Promise<CallToolResult> {
-  // Replay divergence is a FINDING (returned as successful result), not an exception.
-  try {
-    const action = buildSyntheticAction(args.capability_calls);
-    const { output } = await replayPillar(args.recording, action);
-    return {
-      content: [{ type: 'text', text: JSON.stringify({ result: output }) }],
-    };
-  } catch (err) {
-    if (err instanceof ReplayDivergenceError) {
-      return {
-        content: [
-          { type: 'text', text: JSON.stringify({ divergence: divergenceToPayload(err) }) },
-        ],
-      };
-    }
-    // Other structured errors → isError. Plain Error → rethrow.
-    return wrapStructured(async () => {
+  // Replay divergence is a FINDING (the replay successfully detected a
+  // mismatch), not a tool failure. It is returned through the success arm
+  // of the tagged-union envelope as { ok:true, data:{divergence} } so the
+  // caller's branch on `ok` matches the protocol-level `isError` flag:
+  // tool succeeded, the data field tells the story. Any other structured
+  // error (a real failure path) goes through wrapStructured to the failure
+  // arm, matching every other handler.
+  return wrapStructured(async () => {
+    try {
+      const action = buildSyntheticAction(args.capability_calls);
+      const { output } = await replayPillar(args.recording, action);
+      return { result: output };
+    } catch (err) {
+      if (err instanceof ReplayDivergenceError) {
+        return { divergence: divergenceToPayload(err) };
+      }
       throw err;
-    });
-  }
+    }
+  });
 }
 
 interface FormatErrorInput {

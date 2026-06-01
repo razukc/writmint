@@ -1,8 +1,21 @@
-// Contract: handlers wrap structured errors as `{isError, content}` and rethrow
-// plain Errors so MCP transport surfaces them. The rethrow contract is pinned
-// in tests/mcp/error-wrapping.test.ts (the `rethrows plain Error...` case).
+// Contract (v0.3.2+): every handler returns a CallToolResult with a single
+// text content block carrying a tagged-union envelope:
+//   { ok: true,  data:   <handler-specific> }   — envelope.isError unset
+//   { ok: false, errors: StructuredError[] }    — envelope.isError === true
+// The MCP-level isError flag and inner-text `ok` are redundant by design;
+// both signal the same outcome. Callers branch once on either channel.
+//
+// Plain Errors are still rethrown so the MCP transport surfaces them; the
+// rethrow contract is pinned in tests/mcp/error-wrapping.test.ts.
+
 import { describe, it, expect } from 'vitest';
-import { validateManifest, hashManifest, submitManifest, approveManifest, auditEvents } from '../../tools/mcp/handlers.js';
+import {
+  validateManifest,
+  hashManifest,
+  submitManifest,
+  approveManifest,
+  auditEvents,
+} from '../../tools/mcp/handlers.js';
 import type { CapabilityManifest } from '../../src/index.js';
 
 const validManifest: CapabilityManifest = {
@@ -36,21 +49,67 @@ const validManifest: CapabilityManifest = {
 describe('validate_manifest handler', () => {
   it('returns ok:true with the hardened manifest for a valid input', async () => {
     const result = await validateManifest({ manifest: validManifest });
-    const payload = JSON.parse(result.content[0].text);
-    expect(payload.ok).toBe(true);
-    expect(payload.hardened).toBeDefined();
     expect(result.isError).toBeUndefined();
+    const payload = JSON.parse(result.content[0]!.text);
+    expect(payload.ok).toBe(true);
+    expect(payload.data.hardened).toBeDefined();
   });
 
-  it('returns ok:false with structured errors for a bad input', async () => {
+  it('returns isError:true with ok:false + errors[] for a bad input', async () => {
+    // v0.3.2: validation failure is a tool failure (isError:true), not a
+    // success-with-ok:false result. The MCP-level signal now matches the
+    // inner-text shape; the agent branches once. See v0.3 candidate #3.
     const bad = { ...validManifest, id: '' };
     const result = await validateManifest({ manifest: bad as unknown as CapabilityManifest });
-    const payload = JSON.parse(result.content[0].text);
+    expect(result.isError).toBe(true);
+    const payload = JSON.parse(result.content[0]!.text);
     expect(payload.ok).toBe(false);
+    expect(Array.isArray(payload.errors)).toBe(true);
     expect(payload.errors.length).toBeGreaterThan(0);
     expect(payload.errors[0]).toHaveProperty('code');
     expect(payload.errors[0]).toHaveProperty('fixHint');
-    expect(result.isError).toBeUndefined(); // findings, not a tool failure
+  });
+
+  it('returns every violation (structural + hardening) in one rejection', async () => {
+    // Pass 06 scenario: pre-v0.3.1 the pipeline short-circuited between
+    // stages; v0.3.1 added verifyManifest which collects both. v0.3.2
+    // surfaces every error via the new errors[] array. Together: a mixed
+    // first-draft manifest's full picture in one round-trip.
+    const bad: unknown = {
+      schemaVersion: 1,
+      id: 'ops.multi-fail',
+      version: 'not-a-semver', // structural
+      title: 'Multi fail',
+      description: 'A capability deliberately violating several rules.',
+      permissions: [
+        {
+          type: 'network',
+          id: 'net.api',
+          hosts: ['*.example.com'], // hardening
+          methods: ['GET'],
+          reason: 'short', // hardening
+        },
+      ],
+      actions: [
+        {
+          id: 'do.it',
+          description: 'do', // hardening
+          input: { type: 'object' },
+          output: { type: 'object' },
+          permissions: ['net.api'],
+          handler: 'run',
+        },
+      ],
+      implementation: { type: 'module', entry: './impl.js' },
+    };
+    const result = await validateManifest({ manifest: bad as CapabilityManifest });
+    expect(result.isError).toBe(true);
+    const payload = JSON.parse(result.content[0]!.text);
+    const codes: string[] = payload.errors.map((e: { code: string }) => e.code);
+    expect(codes).toContain('semver.invalid');
+    expect(codes).toContain('permission.network.host_wildcard');
+    expect(codes).toContain('permission.reason.too_short');
+    expect(codes).toContain('action.description.too_short');
   });
 });
 
@@ -58,7 +117,9 @@ describe('hash_manifest handler', () => {
   it('returns the same hash for identical manifests', async () => {
     const a = await hashManifest({ manifest: validManifest });
     const b = await hashManifest({ manifest: validManifest });
-    expect(JSON.parse(a.content[0].text).hash).toEqual(JSON.parse(b.content[0].text).hash);
+    const ha = JSON.parse(a.content[0]!.text).data.hash;
+    const hb = JSON.parse(b.content[0]!.text).data.hash;
+    expect(ha).toEqual(hb);
   });
 
   it('returns different hashes for differing manifests', async () => {
@@ -66,7 +127,9 @@ describe('hash_manifest handler', () => {
     const b = await hashManifest({
       manifest: { ...validManifest, version: '1.0.1' },
     });
-    expect(JSON.parse(a.content[0].text).hash).not.toEqual(JSON.parse(b.content[0].text).hash);
+    const ha = JSON.parse(a.content[0]!.text).data.hash;
+    const hb = JSON.parse(b.content[0]!.text).data.hash;
+    expect(ha).not.toEqual(hb);
   });
 });
 
@@ -74,28 +137,30 @@ describe('submit_manifest handler', () => {
   it('returns state:submitted with hash and warnings for a valid manifest', async () => {
     const result = await submitManifest({ manifest: validManifest });
     expect(result.isError).toBeUndefined();
-    const payload = JSON.parse(result.content[0].text);
-    expect(payload.state).toBe('submitted');
-    expect(payload.hash).toBeDefined();
-    expect(payload.manifestId).toBe(validManifest.id);
-    expect(Array.isArray(payload.warnings)).toBe(true);
+    const payload = JSON.parse(result.content[0]!.text);
+    expect(payload.ok).toBe(true);
+    expect(payload.data.state).toBe('submitted');
+    expect(payload.data.hash).toBeDefined();
+    expect(payload.data.manifestId).toBe(validManifest.id);
+    expect(Array.isArray(payload.data.warnings)).toBe(true);
   });
 
-  it('returns isError:true with structured error for an invalid manifest', async () => {
+  it('returns isError:true with errors[] for an invalid manifest', async () => {
     const bad = {
       ...validManifest,
       permissions: [
         {
-          ...validManifest.permissions[0],
+          ...validManifest.permissions[0]!,
           reason: 'short', // Too few words for reason
         },
       ],
     };
     const result = await submitManifest({ manifest: bad as unknown as CapabilityManifest });
     expect(result.isError).toBe(true);
-    const payload = JSON.parse(result.content[0].text);
-    expect(payload).toHaveProperty('code');
-    expect(payload).toHaveProperty('fixHint');
+    const payload = JSON.parse(result.content[0]!.text);
+    expect(payload.ok).toBe(false);
+    expect(payload.errors[0]).toHaveProperty('code');
+    expect(payload.errors[0]).toHaveProperty('fixHint');
   });
 });
 
@@ -106,18 +171,19 @@ describe('approve_manifest handler', () => {
       approver: 'alice@example.com',
     });
     expect(result.isError).toBeUndefined();
-    const payload = JSON.parse(result.content[0].text);
-    expect(payload.state).toBe('approved');
-    expect(payload.hash).toBeDefined();
-    expect(payload.manifestId).toBe(validManifest.id);
+    const payload = JSON.parse(result.content[0]!.text);
+    expect(payload.ok).toBe(true);
+    expect(payload.data.state).toBe('approved');
+    expect(payload.data.hash).toBeDefined();
+    expect(payload.data.manifestId).toBe(validManifest.id);
   });
 
-  it('returns isError:true with structured error for an invalid manifest', async () => {
+  it('returns isError:true with errors[] for an invalid manifest', async () => {
     const bad = {
       ...validManifest,
       permissions: [
         {
-          ...validManifest.permissions[0],
+          ...validManifest.permissions[0]!,
           reason: 'short', // Too few words for reason
         },
       ],
@@ -127,9 +193,10 @@ describe('approve_manifest handler', () => {
       approver: 'alice@example.com',
     });
     expect(result.isError).toBe(true);
-    const payload = JSON.parse(result.content[0].text);
-    expect(payload).toHaveProperty('code');
-    expect(payload).toHaveProperty('fixHint');
+    const payload = JSON.parse(result.content[0]!.text);
+    expect(payload.ok).toBe(false);
+    expect(payload.errors[0]).toHaveProperty('code');
+    expect(payload.errors[0]).toHaveProperty('fixHint');
   });
 });
 
@@ -137,9 +204,10 @@ describe('audit_events handler', () => {
   it('returns an empty events array for a manifest with no recorded transports', async () => {
     const result = await auditEvents({ manifest: validManifest });
     expect(result.isError).toBeUndefined();
-    const payload = JSON.parse(result.content[0].text);
-    expect(Array.isArray(payload.events)).toBe(true);
-    expect(payload.events.length).toBe(0);
+    const payload = JSON.parse(result.content[0]!.text);
+    expect(payload.ok).toBe(true);
+    expect(Array.isArray(payload.data.events)).toBe(true);
+    expect(payload.data.events.length).toBe(0);
   });
 });
 
@@ -155,13 +223,14 @@ describe('record handler', () => {
         { kind: 'storage.get', input: { scope: 'cache', key: 'k' } },
       ],
     });
-    const payload = JSON.parse(result.content[0].text);
-    expect(payload.recording.entries).toHaveLength(2);
+    const payload = JSON.parse(result.content[0]!.text);
+    expect(payload.ok).toBe(true);
+    expect(payload.data.recording.entries).toHaveLength(2);
   });
 });
 
 describe('replay handler', () => {
-  it('returns {result} when replay matches the recording', async () => {
+  it('returns ok:true with {result} when replay matches the recording', async () => {
     const { record, replay } = await import('../../tools/mcp/handlers.js');
     const recorded = await record({
       manifest: validManifest,
@@ -171,7 +240,7 @@ describe('replay handler', () => {
         { kind: 'storage.put', input: { scope: 'cache', key: 'k', value: 'v' } },
       ],
     });
-    const recording = JSON.parse(recorded.content[0].text).recording;
+    const recording = JSON.parse(recorded.content[0]!.text).data.recording;
 
     const result = await replay({
       manifest: validManifest,
@@ -182,13 +251,17 @@ describe('replay handler', () => {
         { kind: 'storage.put', input: { scope: 'cache', key: 'k', value: 'v' } },
       ],
     });
-    const payload = JSON.parse(result.content[0].text);
-    expect(payload.result).toBeDefined();
-    expect(payload.divergence).toBeUndefined();
     expect(result.isError).toBeUndefined();
+    const payload = JSON.parse(result.content[0]!.text);
+    expect(payload.ok).toBe(true);
+    expect(payload.data.result).toBeDefined();
+    expect(payload.data.divergence).toBeUndefined();
   });
 
-  it('returns {divergence} as a non-error result when the recording diverges', async () => {
+  it('returns ok:true with {divergence} when the recording diverges (finding, not failure)', async () => {
+    // Divergence is a FINDING, not a tool failure: the replay successfully
+    // detected the mismatch. It lives in the success arm of the tagged
+    // union; isError stays unset.
     const { record, replay } = await import('../../tools/mcp/handlers.js');
     const recorded = await record({
       manifest: validManifest,
@@ -198,7 +271,7 @@ describe('replay handler', () => {
         { kind: 'storage.put', input: { scope: 'cache', key: 'a', value: '1' } },
       ],
     });
-    const recording = JSON.parse(recorded.content[0].text).recording;
+    const recording = JSON.parse(recorded.content[0]!.text).data.recording;
 
     const result = await replay({
       manifest: validManifest,
@@ -209,10 +282,11 @@ describe('replay handler', () => {
         { kind: 'storage.put', input: { scope: 'cache', key: 'b', value: '2' } },
       ],
     });
-    const payload = JSON.parse(result.content[0].text);
-    expect(payload.divergence).toBeDefined();
-    expect(payload.divergence.code).toMatch(/replay/);
     expect(result.isError).toBeUndefined();
+    const payload = JSON.parse(result.content[0]!.text);
+    expect(payload.ok).toBe(true);
+    expect(payload.data.divergence).toBeDefined();
+    expect(payload.data.divergence.code).toMatch(/replay/);
   });
 });
 
@@ -228,7 +302,8 @@ describe('format_error handler', () => {
         fixHint: 'fix it',
       },
     });
-    const payload = JSON.parse(result.content[0].text);
-    expect(payload.formatted).toBe('[test.bad] somewhere: expected good, got bad — fix it');
+    const payload = JSON.parse(result.content[0]!.text);
+    expect(payload.ok).toBe(true);
+    expect(payload.data.formatted).toBe('[test.bad] somewhere: expected good, got bad — fix it');
   });
 });

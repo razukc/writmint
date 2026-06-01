@@ -6,6 +6,72 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Breaking changes
+
+#### MCP handler response shape — tagged-union envelope
+
+The text body of every MCP tool call now follows a tagged union:
+
+```jsonc
+// success (envelope.isError unset)
+{ "ok": true,  "data":   { /* handler-specific */ } }
+
+// failure (envelope.isError === true)
+{ "ok": false, "errors": [ /* StructuredError[] */ ] }
+```
+
+The MCP-level `isError` flag and inner-text `ok` are redundant by
+design and never disagree: callers can branch on either channel and
+reach the same conclusion. Pre-v0.3.2, every handler had its own
+success shape (`{hash}`, `{state, hash, manifestId}`, etc.) and the
+error path was a bare `StructuredError` object. `validate_manifest`
+was further inconsistent — its rejection rode the success arm of the
+envelope as `{ok:false, errors}` while every other handler used
+`isError:true`. Robotic callers had to branch on shape, not on `ok`,
+and `validate_manifest` callers had to branch *twice* (once on the
+envelope, once on the inner `ok`).
+
+The new envelope collapses all of that. Migration:
+
+```diff
+-  const text = JSON.parse(result.content[0].text);
+-  if (result.isError) {
+-    // text is a bare StructuredError
+-    recover(text);
+-  } else {
+-    // text is {hash}, {state,...}, {events}, etc.
+-    use(text);
+-  }
++  const env = JSON.parse(result.content[0].text);
++  if (env.ok) {
++    use(env.data);
++  } else {
++    recover(env.errors); // always an array
++  }
+```
+
+Surfaced by v0.3 candidate #3. Affects every MCP consumer; the change
+is wire-level and cannot be opted out. v0.3.1 client code does not
+deserialize v0.3.2 server output cleanly.
+
+`replay`'s divergence finding stays in the success arm
+(`{ok:true, data:{divergence}}`) because divergence is a successful
+detection, not a failure to detect.
+
+### Added
+
+- **`RuntimeError.allErrors`** — `RuntimeError` carries `readonly
+  allErrors: readonly StructuredError[]` alongside the existing
+  `structured: StructuredError`, mirroring v0.3.1's `ApprovalError`
+  change. The constructor accepts either the old 2-arg shape
+  (`new RuntimeError(s, { cause })`) or the new 3-arg shape
+  (`new RuntimeError(s, allErrors, { cause? })`) — existing throws
+  keep working unchanged. `wrapStructured` in the MCP layer pulls
+  `allErrors` when present, so a single thrown `RuntimeError` carrying
+  N violations surfaces all N in the wire response without further
+  plumbing. Used by the `validate_manifest` handler to surface every
+  `verifyManifest` violation on one MCP call.
+
 ## [0.3.1] — 2026-05-31
 
 A patch release that closes the last short-circuit in the authoring

@@ -8,10 +8,36 @@ export interface StructuredError {
 
 export class RuntimeError extends Error {
   readonly structured: StructuredError;
-  constructor(structured: StructuredError, options?: { cause?: unknown }) {
+  /**
+   * The full set of structured errors that caused this failure. For most
+   * throw sites this is a single entry matching `structured`. For batch
+   * gates (e.g. an MCP handler that runs `verifyManifest()` and rejects),
+   * this carries every violation so the caller can recover off all of them
+   * in one round-trip. Mirrors `ApprovalError.allErrors`.
+   */
+  readonly allErrors: readonly StructuredError[];
+  constructor(
+    structured: StructuredError,
+    allErrorsOrOptions?: readonly StructuredError[] | { cause?: unknown },
+    optionsArg?: { cause?: unknown }
+  ) {
+    // Two call shapes for backward compatibility:
+    //   new RuntimeError(s)
+    //   new RuntimeError(s, { cause })            ← original 2-arg form
+    //   new RuntimeError(s, allErrors)
+    //   new RuntimeError(s, allErrors, { cause }) ← new 3-arg form
+    let allErrors: readonly StructuredError[] | undefined;
+    let options: { cause?: unknown } | undefined;
+    if (Array.isArray(allErrorsOrOptions)) {
+      allErrors = allErrorsOrOptions as readonly StructuredError[];
+      options = optionsArg;
+    } else {
+      options = allErrorsOrOptions as { cause?: unknown } | undefined;
+    }
     super(formatStructuredError(structured), options as ErrorOptions | undefined);
     this.name = 'RuntimeError';
     this.structured = structured;
+    this.allErrors = allErrors ?? [structured];
   }
 }
 
