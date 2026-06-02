@@ -6,6 +6,43 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.4.1] — 2026-06-01
+
+A security-driven patch release. Bumps `vitest` and `@vitest/coverage-v8`
+from `^4.0.15` to `^4.1.8` to pick up the fix for
+[GHSA-9crc-q9x8-hgqq](https://github.com/advisories/GHSA-9crc-q9x8-hgqq)
+("When Vitest UI server is listening, arbitrary file can be read and
+executed"). The transitive `brace-expansion` DoS finding
+([GHSA-jxxr-4gwj-5jf2](https://github.com/advisories/GHSA-jxxr-4gwj-5jf2))
+is resolved by `npm audit fix`. Both dependencies are `devDependencies`
+only — they do not ship to npm consumers — but the fixes matter for
+anyone running the test suite or building from source. `npm audit` now
+reports zero vulnerabilities.
+
+### Fixed
+
+- **Vitest 4 migration.** `poolOptions` was removed in vitest 4;
+  `execArgv` and `maxWorkers` are now top-level `test` config keys.
+  Updated `vitest.config.ts` accordingly. The previous `--expose-gc`
+  worker flag is dropped: Node 22+ rejects it as a `worker_threads`
+  argv (`ERR_WORKER_INVALID_EXEC_ARGV`), and the memory-leak tests
+  already guard `global.gc` calls. The `should not leak memory with
+  hostContext over multiple cycles` threshold was raised from 600 KB
+  to 1000 KB to absorb vitest 4.1.x's ~200 KB additional worker-pool
+  overhead plus the V8-fragmentation noise the missing gc introduces.
+  This test measures harness overhead more than Runtime retention; the
+  comment in the test file documents the rationale. If a real Runtime
+  retention regression lands, the threshold should be lowered after
+  the regression is fixed, not before.
+
+### Notes
+
+- 825 tests pass.
+- Pre-stable. Public API surface may still change before v1.0.
+- Requires Node ≥ 22.
+
+[0.4.1]: https://github.com/razukc/writmint/releases/tag/v0.4.1
+
 ## [0.4.0] — 2026-05-31
 
 A minor-numbered **breaking** release at the MCP wire boundary. Every

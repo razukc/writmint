@@ -1,6 +1,6 @@
 {
   "name": "writmint",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "A verifier for capabilities an author can't author past. Declare a capability manifest, scope its permissions, harden it before approval, replay its execution, and require a hash-bound human approval before it runs.",
   "type": "module",
   "main": "dist/index.js",
@@ -64,12 +64,12 @@
   "devDependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",
     "@types/node": "^22.0.0",
-    "@vitest/coverage-v8": "^4.0.15",
+    "@vitest/coverage-v8": "^4.1.8",
     "fast-check": "^3.15.0",
     "rimraf": "^6.1.2",
     "tsx": "^4.19.0",
     "typescript": "^5.3.3",
-    "vitest": "^4.0.15"
+    "vitest": "^4.1.8"
   },
   "optionalDependencies": {
     "@types/react": "^18.2.0",
