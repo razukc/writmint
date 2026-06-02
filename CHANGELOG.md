@@ -6,6 +6,17 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.4.0] — 2026-05-31
+
+A minor-numbered **breaking** release at the MCP wire boundary. Every
+MCP handler's response now follows a tagged-union envelope, collapsing
+the per-handler success shapes and the bare-object error path into a
+single `{ ok, data }` / `{ ok, errors }` form. The Node API is
+purely additive — `RuntimeError` grew `allErrors[]` mirroring v0.3.1's
+`ApprovalError` change, and `wrapStructured` reads it automatically.
+The version bump is governed by the wire-side break: a v0.3.1 MCP
+client does not deserialize v0.4.0 server output cleanly.
+
 ### Breaking changes
 
 #### MCP handler response shape — tagged-union envelope
@@ -71,6 +82,14 @@ detection, not a failure to detect.
   N violations surfaces all N in the wire response without further
   plumbing. Used by the `validate_manifest` handler to surface every
   `verifyManifest` violation on one MCP call.
+
+### Notes
+
+- 825 tests pass.
+- Pre-stable. Public API surface may still change before v1.0.
+- Requires Node ≥ 22.
+
+[0.4.0]: https://github.com/razukc/writmint/releases/tag/v0.4.0
 
 ## [0.3.1] — 2026-05-31
 
