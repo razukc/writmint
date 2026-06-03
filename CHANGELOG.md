@@ -6,6 +6,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.4.2] — 2026-06-03
+
+A patch release tightening the agent-authored reason-string contract,
+and bringing the README back into sync with the v0.3.x / v0.4.x
+changes that had drifted out of it. Pure-additive — no breaking
+changes; existing manifests continue to validate, submit, and approve
+unchanged.
+
 ### Added
 
 - **`permission.reason.action_ref_incomplete` hardening warning** —
@@ -25,6 +33,22 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   rewriting the whole reason. Warning, not error: matches the
   strictness of `no_action_ref`. Closes v0.3 candidate #1. 5 new tests
   pin the rule.
+
+### Changed
+
+- **README refresh.** The README had not been updated since v0.2.0;
+  this release brings the status banner, hardening rule list,
+  destructive-action gate, MCP server section, repository layout, and
+  test counts in sync with v0.4.x. Adds a v0.2.x / v0.3.x / v0.4.x
+  pointer at the bottom for the full record.
+
+### Notes
+
+- 830 tests pass.
+- Pre-stable. Public API surface may still change before v1.0.
+- Requires Node ≥ 22.
+
+[0.4.2]: https://github.com/razukc/writmint/releases/tag/v0.4.2
 
 ## [0.4.1] — 2026-06-01
 
