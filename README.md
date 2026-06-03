@@ -4,7 +4,7 @@
 
 You let an AI agent write a capability. Writmint refuses to let the capability do anything its manifest doesn't account for — and tells the agent exactly what to fix when it tries.
 
-> Status: **v0.2.0 — early.** API surface is stable enough for the demo below, not yet stable enough to depend on. Issues and feedback welcome.
+> Status: **v0.4.x — early.** API surface is stable enough for the demo below, not yet stable enough to depend on. Issues and feedback welcome.
 
 ---
 
@@ -110,7 +110,12 @@ Each pillar is one file in `src/`.
 
 A `CapabilityManifest` names the capability, lists every permission it needs (network hosts, storage scopes, ui, clock, audit), and declares its actions. The runtime only executes what the manifest declares.
 
-`hardenManifest()` runs after structural validation. It enforces strictness checks that an approver would otherwise have to enforce by eye: reasons must be ≥5 words, action descriptions must be ≥5 words, no wildcards in network hosts or storage scopes, and (as a warning) every permission's reason should name an action that uses it.
+`hardenManifest()` runs after structural validation. It enforces strictness checks that an approver would otherwise have to enforce by eye:
+
+- **Errors** — reasons must be ≥5 words, action descriptions must be ≥5 words, no wildcards in network `hosts` or storage `scope`.
+- **Warnings** — every permission's reason should name the action(s) that use it (`permission.reason.no_action_ref` when none are named, `permission.reason.action_ref_incomplete` when only some of N≥2 are named); manifests should not carry stray fields at the top level, inside a permission, or inside an action (`manifest.unknown_field`).
+
+`verifyManifest()` is the one-shot entry point: it runs structural validation and hardening together and returns every error and warning the manifest produces in one call. Broken subtrees from structural failure are skipped during hardening, but the rest of the manifest still gets hardened — a mixed-violation first draft surfaces every fix on the first round-trip.
 
 Source: [`src/capability-manifest.ts`](./src/capability-manifest.ts).
 
@@ -150,6 +155,8 @@ Source: [`src/replay.ts`](./src/replay.ts).
 
 A capability moves through a lifecycle: `draft → submitted → approved → active → revoked`. The approval is bound to a SHA-256 hash of the manifest. Modify the manifest by one byte after approval and the runtime refuses to execute. Every transition emits an audit event; sensitive paths declared in the manifest are redacted before they reach the audit sink.
 
+If any action sets `destructive: true`, `approve()` additionally requires a `destructiveApprovedBy` value — silent at `submit()` / `validate()`, surfaces only at approve time as `approval.destructive_required`. For a stricter two-person rule, set `requireDistinctDestructiveApprover: true` on the destructive action(s); `approve()` then rejects identical `approvedBy` and `destructiveApprovedBy` with `approval.destructive.same_approver`. The flag is per-action and hash-bound, so a same-actor approval cannot be done by unflagging post-submit.
+
 Source: [`src/approval.ts`](./src/approval.ts).
 
 ---
@@ -160,7 +167,7 @@ Source: [`src/approval.ts`](./src/approval.ts).
 
 - **Phase H — failure-path correctness:** chaos-transport induces a timeout mid-flow. The runtime throws a structured error, the audit trail captures the pre-failure work, and a replay against the recording reproduces the failure deterministically.
 
-750 tests pass across `tests/{unit,integration,property}`.
+830 tests pass across `tests/{unit,integration,property,mcp}`.
 
 ---
 
@@ -188,7 +195,7 @@ npm run demo:e2e        # full end-to-end (phases A–H, including failure-path 
 npm run demo            # all four, in order
 ```
 
-Each script is a single TypeScript file in `fixtures/suspicious-transaction-triage/`. Read them alongside the output — they are the most concrete documentation Writmint has at v0.2.
+Each script is a single TypeScript file in `fixtures/suspicious-transaction-triage/`. Read them alongside the output — they are the most concrete documentation Writmint has.
 
 ---
 
@@ -283,6 +290,30 @@ For the full picture — including replay, destructive-action gating, redaction,
 
 ---
 
+## MCP server
+
+For agents driving Writmint through the Model Context Protocol, the package ships an MCP server exposing the same pillars: `validate_manifest`, `submit_manifest`, `approve_manifest`, `hash_manifest`, `record`, `replay`, `audit_events`, `format_error`.
+
+```bash
+npm run mcp   # tsx tools/mcp/server.ts
+```
+
+Every handler's response follows the same tagged-union shape inside the text body:
+
+```jsonc
+// success (envelope.isError unset)
+{ "ok": true,  "data":   { /* handler-specific */ } }
+
+// failure (envelope.isError === true)
+{ "ok": false, "errors": [ /* StructuredError[] */ ] }
+```
+
+`isError` and `text.ok` are redundant by design — callers branch on either channel and reach the same conclusion. A `validate_manifest` rejection carries every structural and hardening violation in `errors[]`, not just the first, so a mixed-violation first-draft manifest gets the full picture in one round-trip.
+
+The `writmint-authoring` Claude Code skill (`~/.claude/skills/writmint-authoring/SKILL.md` in the dogfood environment) is the agent-facing schema reference and recovery-loop guide.
+
+---
+
 ## Repository layout
 
 ```
@@ -302,13 +333,19 @@ fixtures/
     replay-smoke.ts                record + replay (npm run demo:replay)
     chaos-transport.ts             fault-injection wrapper used by phase H
 
+tools/
+  mcp/                         MCP server exposing the pillars (npm run mcp)
+  dogfood/                     PreToolUse hook script + telemetry for dogfood passes
+
 tests/
   unit/                        per-file unit tests
   integration/                 cross-subsystem behavior
   property/                    fast-check property tests
+  mcp/                         MCP server contract tests (handler shape, error wrapping)
+  dogfood/                     telemetry harness for the Layer 3 PreToolUse hook
 ```
 
-750 tests across 48 files, all passing.
+830 tests across 56 files, all passing.
 
 ---
 
@@ -322,6 +359,12 @@ Writmint targets enterprise environments; the patent grant in Apache-2.0 is inte
 
 ## Status and roadmap
 
-v0.2 ships the five pillars, manifest hardening, and the triage demo. What it does not yet ship: stable public API guarantees, broad documentation, additional demos, packaging for non-Node hosts. Those land in v0.x as the API surface settles.
+The five pillars, the canonical demo, and the MCP server are all in. Subsequent v0.x releases have tightened the authoring surface based on dogfood feedback from agents writing manifests against the live system:
+
+- **v0.2.x** — manifest hardening rules (wildcard hosts/scopes, reason/description length, reason-references-action warning); replay JSON stability.
+- **v0.3.x** — `manifest.unknown_field` warning; opt-in two-person rule on destructive approval (`requireDistinctDestructiveApprover`); `verifyManifest()` combined structural + hardening; `ApprovalError.allErrors` so every batch rejection arrives complete.
+- **v0.4.x** — tagged-union envelope on every MCP handler response (`{ok, data}` / `{ok, errors}`); `RuntimeError.allErrors` mirroring the v0.3.1 approval change; vitest 4 / dependency security patch.
+
+What it does not yet ship: stable public API guarantees, broad documentation, additional demos, packaging for non-Node hosts. Those land in v0.x as the API surface settles. See [`CHANGELOG.md`](./CHANGELOG.md) for the full record.
 
 If you are evaluating Writmint for a regulated-ops use case, open an issue — the demo is the best current answer to "is this real?"

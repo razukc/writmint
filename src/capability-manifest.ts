@@ -359,8 +359,18 @@ export function hardenManifest(
     if (!refs || refs.length === 0) return;
     if (typeof perm.reason !== 'string') return;
 
-    const mentionsAny = refs.some((actionId) => perm.reason.includes(actionId));
-    if (!mentionsAny) {
+    // Partition the failure space:
+    //   0 of N mentioned  → no_action_ref      (existing rule)
+    //   some-but-not-all  → action_ref_incomplete (this is candidate #1)
+    //   all N mentioned   → clean
+    // action_ref_incomplete only fires when refs.length >= 2: a permission
+    // referenced by exactly one action cannot be "partially named", so
+    // the 0-of-1 case falls cleanly into no_action_ref's territory.
+    const reason = perm.reason;
+    const mentioned = refs.filter((actionId) => reason.includes(actionId));
+    const missing = refs.filter((actionId) => !reason.includes(actionId));
+
+    if (mentioned.length === 0) {
       warnings.push({
         code: 'permission.reason.no_action_ref',
         where: `$.permissions[${i}].reason`,
@@ -368,6 +378,15 @@ export function hardenManifest(
         actual: `"${perm.reason}"`,
         fixHint:
           'Name the action(s) that use this permission so an approver can trace each grant to a caller.',
+      });
+    } else if (missing.length > 0 && refs.length >= 2) {
+      warnings.push({
+        code: 'permission.reason.action_ref_incomplete',
+        where: `$.permissions[${i}].reason`,
+        expected: `reason mentions all of: ${refs.join(', ')}`,
+        actual: `mentions ${mentioned.length} of ${refs.length} (${mentioned.join(', ')}); missing: ${missing.join(', ')}`,
+        fixHint:
+          'Name every action that uses this permission so an approver sees the full call surface, not just one caller.',
       });
     }
   });

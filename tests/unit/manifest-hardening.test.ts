@@ -489,3 +489,190 @@ describe('hardenManifest — manifest.unknown_field', () => {
     expect(wheres).toEqual(['$.author', '$.notes']);
   });
 });
+
+describe('hardenManifest — permission.reason.action_ref_incomplete (warning)', () => {
+  // Raised by v0.3 candidate #1. `no_action_ref` only fires when a reason
+  // mentions NONE of the referencing actions. If a permission is used by
+  // [a.b, a.c, a.d] and the reason names a.b, no_action_ref stays silent —
+  // but a.c and a.d are silently undocumented. action_ref_incomplete fills
+  // the gap: a permission referenced by N≥2 actions whose reason names some
+  // but not all of them gets called out. The two rules partition the
+  // failure space (0/N, 1..N-1/N, N/N) so they never both fire on the same
+  // permission.
+  it('warns when reason mentions some but not all referencing actions (N=3, names 1)', () => {
+    const m = baseManifest({
+      permissions: [
+        {
+          type: 'storage',
+          id: 'store.cache',
+          scope: 'example/items',
+          mode: 'readwrite',
+          reason: 'Used by example.load to read and write cached items.',
+        },
+      ],
+      actions: [
+        {
+          id: 'example.load',
+          description: 'Load example records from the upstream API.',
+          input: { type: 'object' },
+          output: { type: 'object' },
+          permissions: ['store.cache'],
+          handler: 'load',
+        },
+        {
+          id: 'example.purge',
+          description: 'Purge cached records older than a threshold.',
+          input: { type: 'object' },
+          output: { type: 'object' },
+          permissions: ['store.cache'],
+          handler: 'purge',
+        },
+        {
+          id: 'example.snapshot',
+          description: 'Snapshot the cache for offline analysis later.',
+          input: { type: 'object' },
+          output: { type: 'object' },
+          permissions: ['store.cache'],
+          handler: 'snapshot',
+        },
+      ],
+    });
+    const { warnings } = hardenManifest(m);
+    const w = warnings.find((x) => x.code === 'permission.reason.action_ref_incomplete');
+    expect(w).toBeDefined();
+    expect(w!.where).toBe('$.permissions[0].reason');
+    // The actual field reports the full picture: mentioned-count, names of
+    // those mentioned, and names of those missing. The agent needs both
+    // sets to fix — knowing what's missing is what closes the loop, but
+    // showing what's already there avoids the agent rewriting the whole
+    // reason from scratch.
+    expect(w!.actual).toContain('1 of 3');
+    expect(w!.actual).toMatch(/missing:\s*example\.purge,\s*example\.snapshot/);
+  });
+
+  it('does not warn when reason mentions all referencing actions', () => {
+    const m = baseManifest({
+      permissions: [
+        {
+          type: 'storage',
+          id: 'store.cache',
+          scope: 'example/items',
+          mode: 'readwrite',
+          reason: 'Used by example.load and example.purge to manage cached items.',
+        },
+      ],
+      actions: [
+        {
+          id: 'example.load',
+          description: 'Load example records from the upstream API.',
+          input: { type: 'object' },
+          output: { type: 'object' },
+          permissions: ['store.cache'],
+          handler: 'load',
+        },
+        {
+          id: 'example.purge',
+          description: 'Purge cached records older than a threshold.',
+          input: { type: 'object' },
+          output: { type: 'object' },
+          permissions: ['store.cache'],
+          handler: 'purge',
+        },
+      ],
+    });
+    const { warnings } = hardenManifest(m);
+    expect(
+      warnings.find((x) => x.code === 'permission.reason.action_ref_incomplete'),
+    ).toBeUndefined();
+  });
+
+  it('does not warn when only one action references the permission (no_action_ref territory)', () => {
+    // A permission used by exactly one action cannot be "partially named".
+    // The 0/N case is no_action_ref's job; N=1 means either 0/1 (no_action_ref
+    // fires) or 1/1 (clean). action_ref_incomplete only fires when N>=2.
+    const m = baseManifest(); // baseManifest has one permission referenced by one action
+    const { warnings } = hardenManifest(m);
+    expect(
+      warnings.find((x) => x.code === 'permission.reason.action_ref_incomplete'),
+    ).toBeUndefined();
+  });
+
+  it('does not warn when reason mentions NONE of the referencing actions (no_action_ref fires instead)', () => {
+    // The two rules partition the failure space; they never both fire on
+    // the same permission.
+    const m = baseManifest({
+      permissions: [
+        {
+          type: 'storage',
+          id: 'store.cache',
+          scope: 'example/items',
+          mode: 'readwrite',
+          reason: 'Read and write cached items for the example pipeline daily.',
+        },
+      ],
+      actions: [
+        {
+          id: 'example.load',
+          description: 'Load example records from the upstream API.',
+          input: { type: 'object' },
+          output: { type: 'object' },
+          permissions: ['store.cache'],
+          handler: 'load',
+        },
+        {
+          id: 'example.purge',
+          description: 'Purge cached records older than a threshold.',
+          input: { type: 'object' },
+          output: { type: 'object' },
+          permissions: ['store.cache'],
+          handler: 'purge',
+        },
+      ],
+    });
+    const { warnings } = hardenManifest(m);
+    expect(
+      warnings.find((x) => x.code === 'permission.reason.action_ref_incomplete'),
+    ).toBeUndefined();
+    expect(
+      warnings.find((x) => x.code === 'permission.reason.no_action_ref'),
+    ).toBeDefined();
+  });
+
+  it('expected field lists every referencing action so the agent can recover', () => {
+    const m = baseManifest({
+      permissions: [
+        {
+          type: 'storage',
+          id: 'store.cache',
+          scope: 'example/items',
+          mode: 'readwrite',
+          reason: 'Used by example.load to read cached items right now.',
+        },
+      ],
+      actions: [
+        {
+          id: 'example.load',
+          description: 'Load example records from the upstream API.',
+          input: { type: 'object' },
+          output: { type: 'object' },
+          permissions: ['store.cache'],
+          handler: 'load',
+        },
+        {
+          id: 'example.purge',
+          description: 'Purge cached records older than a threshold.',
+          input: { type: 'object' },
+          output: { type: 'object' },
+          permissions: ['store.cache'],
+          handler: 'purge',
+        },
+      ],
+    });
+    const { warnings } = hardenManifest(m);
+    const w = warnings.find((x) => x.code === 'permission.reason.action_ref_incomplete');
+    expect(w).toBeDefined();
+    expect(w!.expected).toContain('example.load');
+    expect(w!.expected).toContain('example.purge');
+    expect(w!.fixHint).toMatch(/every action|all the actions/i);
+  });
+});

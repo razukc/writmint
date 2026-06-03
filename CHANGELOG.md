@@ -6,6 +6,26 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **`permission.reason.action_ref_incomplete` hardening warning** —
+  `hardenManifest()` now emits a structured warning when a permission's
+  `reason` mentions some but not all of the actions that reference it.
+  The existing `permission.reason.no_action_ref` warning only fires
+  when the reason mentions *none* of the referencing actions, so a
+  permission used by `[a.run, a.purge, a.snapshot]` whose reason names
+  only `a.run` slipped through silently — `a.purge` and `a.snapshot`
+  were left undocumented in the very field meant to enumerate them.
+  The two rules now partition the failure space: `0/N` mentioned
+  triggers `no_action_ref`, `1..N-1/N` triggers
+  `action_ref_incomplete`, `N/N` is clean. The rule only fires when
+  `N >= 2` (a permission referenced by exactly one action cannot be
+  "partially named"). The `actual` field reports both the mention
+  count and the missing action ids so the agent can fix without
+  rewriting the whole reason. Warning, not error: matches the
+  strictness of `no_action_ref`. Closes v0.3 candidate #1. 5 new tests
+  pin the rule.
+
 ## [0.4.1] — 2026-06-01
 
 A security-driven patch release. Bumps `vitest` and `@vitest/coverage-v8`
