@@ -192,7 +192,14 @@ function buildBroker(perm: Permission, transports: HostTransports): Broker {
     case 'network':
       return buildNetworkBroker(perm, transports.network);
     case 'network-dynamic':
-      throw new Error('network-dynamic broker not implemented yet');
+      throw new PermissionError({
+        code: 'permission.network-dynamic.not_implemented',
+        where: `permissions[id=${perm.id}]`,
+        expected: 'a runtime version that implements network-dynamic brokers',
+        actual: 'network-dynamic broker not implemented yet',
+        fixHint:
+          'network-dynamic brokers are not yet supported by this runtime version; use type:network for now.',
+      });
     case 'storage':
       return buildStorageBroker(perm, transports.storage);
     case 'clock':

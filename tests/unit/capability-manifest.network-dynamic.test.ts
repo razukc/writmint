@@ -79,6 +79,126 @@ describe('validateCapabilityManifest — network-dynamic structural', () => {
     expect(e).toBeDefined();
     expect(e!.where).toBe('$.permissions[0].hostPolicy.scheme[1]');
   });
+
+  it('rejects a non-string registrableDomain entry', () => {
+    const m = base({
+      type: 'network-dynamic',
+      id: 'net.dyn',
+      hostPolicy: { registrableDomain: ['acme.com', 7] },
+      reason: 'Pings user-supplied URLs under acme.com from ops.example.go.',
+    } as unknown as Permission);
+    const r = validateCapabilityManifest(m);
+    const e = r.errors.find(
+      (x) => x.code === 'permission.network-dynamic.registrable_domain_value',
+    );
+    expect(e).toBeDefined();
+    expect(e!.where).toBe('$.permissions[0].hostPolicy.registrableDomain[1]');
+  });
+
+  it('rejects a non-array scheme', () => {
+    const m = base({
+      type: 'network-dynamic',
+      id: 'net.dyn',
+      hostPolicy: { registrableDomain: ['acme.com'], scheme: 'https' },
+      reason: 'Pings user-supplied URLs under acme.com from ops.example.go.',
+    } as unknown as Permission);
+    const r = validateCapabilityManifest(m);
+    const e = r.errors.find((x) => x.code === 'permission.network-dynamic.scheme');
+    expect(e).toBeDefined();
+    expect(e!.where).toBe('$.permissions[0].hostPolicy.scheme');
+  });
+
+  it('rejects a non-array port', () => {
+    const m = base({
+      type: 'network-dynamic',
+      id: 'net.dyn',
+      hostPolicy: { registrableDomain: ['acme.com'], port: 443 },
+      reason: 'Pings user-supplied URLs under acme.com from ops.example.go.',
+    } as unknown as Permission);
+    const r = validateCapabilityManifest(m);
+    const e = r.errors.find((x) => x.code === 'permission.network-dynamic.port');
+    expect(e).toBeDefined();
+    expect(e!.where).toBe('$.permissions[0].hostPolicy.port');
+  });
+
+  it('rejects out-of-range and non-integer port values, accepts the 1..65535 boundaries', () => {
+    const rejectedPorts = [0, 65536, 80.5];
+    for (const port of rejectedPorts) {
+      const m = base({
+        type: 'network-dynamic',
+        id: 'net.dyn',
+        hostPolicy: { registrableDomain: ['acme.com'], port: [port] },
+        reason: 'Pings user-supplied URLs under acme.com from ops.example.go.',
+      } as unknown as Permission);
+      const r = validateCapabilityManifest(m);
+      const e = r.errors.find((x) => x.code === 'permission.network-dynamic.port_value');
+      expect(e).toBeDefined();
+      expect(e!.where).toBe('$.permissions[0].hostPolicy.port[0]');
+    }
+
+    const ok = base({
+      type: 'network-dynamic',
+      id: 'net.dyn',
+      hostPolicy: { registrableDomain: ['acme.com'], port: [1, 65535] },
+      reason: 'Pings user-supplied URLs under acme.com from ops.example.go.',
+    });
+    const r = validateCapabilityManifest(ok);
+    expect(
+      r.errors.filter((x) => x.code.startsWith('permission.network-dynamic.port')),
+    ).toEqual([]);
+  });
+
+  it('rejects a non-boolean denyPrivate', () => {
+    const m = base({
+      type: 'network-dynamic',
+      id: 'net.dyn',
+      hostPolicy: { registrableDomain: ['acme.com'], denyPrivate: 'yes' },
+      reason: 'Pings user-supplied URLs under acme.com from ops.example.go.',
+    } as unknown as Permission);
+    const r = validateCapabilityManifest(m);
+    const e = r.errors.find((x) => x.code === 'permission.network-dynamic.deny_private');
+    expect(e).toBeDefined();
+    expect(e!.where).toBe('$.permissions[0].hostPolicy.denyPrivate');
+  });
+
+  it('rejects a non-array pathPrefix', () => {
+    const m = base({
+      type: 'network-dynamic',
+      id: 'net.dyn',
+      hostPolicy: { registrableDomain: ['acme.com'], pathPrefix: '/api' },
+      reason: 'Pings user-supplied URLs under acme.com from ops.example.go.',
+    } as unknown as Permission);
+    const r = validateCapabilityManifest(m);
+    const e = r.errors.find((x) => x.code === 'permission.network-dynamic.path_prefix');
+    expect(e).toBeDefined();
+    expect(e!.where).toBe('$.permissions[0].hostPolicy.pathPrefix');
+  });
+
+  it('rejects a pathPrefix entry without a leading slash', () => {
+    const m = base({
+      type: 'network-dynamic',
+      id: 'net.dyn',
+      hostPolicy: { registrableDomain: ['acme.com'], pathPrefix: ['api'] },
+      reason: 'Pings user-supplied URLs under acme.com from ops.example.go.',
+    } as unknown as Permission);
+    const r = validateCapabilityManifest(m);
+    const e = r.errors.find((x) => x.code === 'permission.network-dynamic.path_prefix_value');
+    expect(e).toBeDefined();
+    expect(e!.where).toBe('$.permissions[0].hostPolicy.pathPrefix[0]');
+  });
+
+  it('rejects a non-string pathPrefix entry', () => {
+    const m = base({
+      type: 'network-dynamic',
+      id: 'net.dyn',
+      hostPolicy: { registrableDomain: ['acme.com'], pathPrefix: [7] },
+      reason: 'Pings user-supplied URLs under acme.com from ops.example.go.',
+    } as unknown as Permission);
+    const r = validateCapabilityManifest(m);
+    const e = r.errors.find((x) => x.code === 'permission.network-dynamic.path_prefix_value');
+    expect(e).toBeDefined();
+    expect(e!.where).toBe('$.permissions[0].hostPolicy.pathPrefix[0]');
+  });
 });
 
 describe('hardenManifest — network/network-dynamic mutual exclusivity', () => {
@@ -141,6 +261,7 @@ describe('hardenManifest — network-dynamic registrable domain wildcards', () =
       (x) => x.code === 'permission.network-dynamic.registrable_domain_invalid',
     );
     expect(e).toBeDefined();
+    expect(e!.where).toBe('$.permissions[0].hostPolicy.registrableDomain[0]');
   });
 
   it('accepts a literal registrable domain', () => {
