@@ -1,3 +1,11 @@
+/**
+ * Host policy checks for outbound network access (SSRF defense).
+ *
+ * PRECONDITION: All host/IP inputs are expected to be WHATWG-URL-normalized
+ * (i.e. taken from `new URL(...).host` / `.hostname`). Raw user strings must
+ * not be passed directly: URL normalization resolves octal/hex/short-form
+ * IPv4 (e.g. 0177.0.0.1 → 127.0.0.1) which these checks rely on.
+ */
 export function matchesRegistrableDomain(host: string, domains: readonly string[]): boolean {
   const h = host.toLowerCase();
   for (const raw of domains) {
@@ -40,11 +48,18 @@ export function classifyHost(raw: string): HostKind {
 
 export type PrivateIpResult = { private: false } | { private: true; range: string };
 
+// IPv4-mapped IPv6, dotted form: ::ffff:a.b.c.d
+const V4_MAPPED_DOTTED_RE = /^::ffff:(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})$/;
+// IPv4-mapped IPv6, hex form (WHATWG canonical): ::ffff:XXXX:XXXX — the last
+// two 16-bit groups encode the v4 address (7f00:1 → 127.0.0.1).
+const V4_MAPPED_HEX_RE = /^::ffff:([0-9a-f]{1,4}):([0-9a-f]{1,4})$/;
+
 export function isPrivateIp(ip: string): PrivateIpResult {
   // IPv4 dotted-quad
   const v4 = ip.match(IPV4_RE);
   if (v4) {
     const [a, b] = [Number(v4[1]), Number(v4[2])];
+    if (a === 0) return { private: true, range: 'unspecified-0/8' };
     if (a === 10) return { private: true, range: 'rfc1918-10/8' };
     if (a === 172 && b >= 16 && b <= 31) return { private: true, range: 'rfc1918-172.16/12' };
     if (a === 192 && b === 168) return { private: true, range: 'rfc1918-192.168/16' };
@@ -55,7 +70,20 @@ export function isPrivateIp(ip: string): PrivateIpResult {
 
   // IPv6 — compare lowercased prefix
   const v6 = ip.toLowerCase();
+  if (v6 === '::') return { private: true, range: 'unspecified-::' };
   if (v6 === '::1') return { private: true, range: 'loopback-::1' };
+
+  // IPv4-mapped IPv6: the embedded v4 address is what matters — recurse into
+  // the v4 logic and report the v4 range.
+  const mappedDotted = v6.match(V4_MAPPED_DOTTED_RE);
+  if (mappedDotted) return isPrivateIp(mappedDotted[1]);
+  const mappedHex = v6.match(V4_MAPPED_HEX_RE);
+  if (mappedHex) {
+    const hi = parseInt(mappedHex[1], 16);
+    const lo = parseInt(mappedHex[2], 16);
+    const embedded = `${hi >> 8}.${hi & 0xff}.${lo >> 8}.${lo & 0xff}`;
+    return isPrivateIp(embedded);
+  }
   // fc00::/7 covers fc00::/8 and fd00::/8
   if (/^f[cd][0-9a-f]{2}:/.test(v6)) return { private: true, range: 'unique-local-fc00::/7' };
   // fe80::/10 — first 10 bits are 1111111010, i.e. fe80..febf

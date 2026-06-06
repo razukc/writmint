@@ -135,4 +135,40 @@ describe('isPrivateIp', () => {
   ])('passes IPv6 %s', (ip) => {
     expect(isPrivateIp(ip)).toEqual({ private: false });
   });
+
+  // IPv4-mapped IPv6 — the embedded v4 address decides; the range reported is the v4 range.
+  it.each([
+    ['::ffff:7f00:1',    'loopback-127/8'],   // hex form of 127.0.0.1
+    ['::ffff:127.0.0.1', 'loopback-127/8'],   // dotted form
+    ['::ffff:a00:1',     'rfc1918-10/8'],     // hex form of 10.0.0.1
+  ])('rejects IPv4-mapped IPv6 %s as %s', (ip, range) => {
+    expect(isPrivateIp(ip)).toEqual({ private: true, range });
+  });
+
+  it.each([
+    ['::ffff:808:808'],  // hex form of 8.8.8.8
+    ['::ffff:8.8.8.8'],
+  ])('passes IPv4-mapped IPv6 %s', (ip) => {
+    expect(isPrivateIp(ip)).toEqual({ private: false });
+  });
+
+  // Unspecified addresses bind/connect to localhost on Linux/macOS.
+  it.each([
+    ['0.0.0.0', 'unspecified-0/8'],
+    ['0.1.2.3', 'unspecified-0/8'],
+  ])('rejects unspecified IPv4 %s as %s', (ip, range) => {
+    expect(isPrivateIp(ip)).toEqual({ private: true, range });
+  });
+
+  it('rejects IPv6 :: as unspecified-::', () => {
+    expect(isPrivateIp('::')).toEqual({ private: true, range: 'unspecified-::' });
+  });
+
+  // Pins the module precondition: inputs come from new URL().hostname, which
+  // normalizes octal/hex/short-form IPv4 before these checks ever see them.
+  it('relies on WHATWG URL normalization of octal IPv4 (0177.0.0.1 → 127.0.0.1)', () => {
+    const hostname = new URL('http://0177.0.0.1/').hostname;
+    expect(hostname).toBe('127.0.0.1');
+    expect(isPrivateIp(hostname)).toEqual({ private: true, range: 'loopback-127/8' });
+  });
 });
