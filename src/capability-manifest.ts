@@ -10,6 +10,22 @@ export type NetworkPermission = {
   reason: string;
 };
 
+export type HostPolicy = {
+  registrableDomain: string[];
+  scheme?: ('http' | 'https')[];
+  port?: number[];
+  denyPrivate?: boolean;
+  pathPrefix?: string[];
+};
+
+export type NetworkDynamicPermission = {
+  type: 'network-dynamic';
+  id: PermissionId;
+  hostPolicy: HostPolicy;
+  methods?: HttpMethod[];
+  reason: string;
+};
+
 export type StorageMode = 'read' | 'write' | 'readwrite';
 
 export type StoragePermission = {
@@ -40,6 +56,7 @@ export type AuditPermission = {
 
 export type Permission =
   | NetworkPermission
+  | NetworkDynamicPermission
   | StoragePermission
   | UiPermission
   | ClockPermission
@@ -116,6 +133,7 @@ export const CAPABILITY_MANIFEST_SCHEMA_VERSION = 1 as const;
 
 export const PERMISSION_TYPES: readonly PermissionType[] = [
   'network',
+  'network-dynamic',
   'storage',
   'ui',
   'clock',
@@ -201,6 +219,7 @@ const MANIFEST_KEYS = new Set([
 const COMMON_PERMISSION_KEYS = new Set(['type', 'id', 'reason']);
 const PERMISSION_KEYS_BY_TYPE: Record<PermissionType, Set<string>> = {
   network: new Set([...COMMON_PERMISSION_KEYS, 'hosts', 'methods']),
+  'network-dynamic': new Set([...COMMON_PERMISSION_KEYS, 'hostPolicy', 'methods']),
   storage: new Set([...COMMON_PERMISSION_KEYS, 'scope', 'mode']),
   ui: new Set(COMMON_PERMISSION_KEYS),
   clock: new Set(COMMON_PERMISSION_KEYS),

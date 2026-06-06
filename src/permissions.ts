@@ -191,6 +191,8 @@ function buildBroker(perm: Permission, transports: HostTransports): Broker {
   switch (perm.type) {
     case 'network':
       return buildNetworkBroker(perm, transports.network);
+    case 'network-dynamic':
+      throw new Error('network-dynamic broker not implemented yet');
     case 'storage':
       return buildStorageBroker(perm, transports.storage);
     case 'clock':
