@@ -153,6 +153,7 @@ export const HTTP_METHODS: readonly HttpMethod[] = [
 export const STORAGE_MODES: readonly StorageMode[] = ['read', 'write', 'readwrite'] as const;
 
 import type { StructuredError } from './errors.js';
+import { isValidRegistrableDomainEntry } from './host-policy.js';
 
 export type ManifestError = StructuredError;
 export type ManifestWarning = StructuredError;
@@ -327,6 +328,44 @@ export function hardenManifest(
           });
         }
       });
+      if ((perm as Record<string, unknown>).hostPolicy !== undefined) {
+        errors.push({
+          code: 'permission.network.host_policy_forbidden',
+          where: `${where}.hostPolicy`,
+          expected: 'no hostPolicy on type:network',
+          actual: 'hostPolicy present',
+          fixHint:
+            'Use hosts on type:network; hostPolicy is for type:network-dynamic. Change the permission type if the host is supplied at call time.',
+        });
+      }
+    }
+
+    if (perm.type === 'network-dynamic') {
+      if ((perm as Record<string, unknown>).hosts !== undefined) {
+        errors.push({
+          code: 'permission.network-dynamic.hosts_forbidden',
+          where: `${where}.hosts`,
+          expected: 'no hosts on type:network-dynamic',
+          actual: 'hosts present',
+          fixHint:
+            'Use hostPolicy.registrableDomain on type:network-dynamic; hosts is for type:network. Change the permission type if the host list is fixed at author time.',
+        });
+      }
+      const hp = (perm as Record<string, unknown>).hostPolicy;
+      if (isPlainObject(hp) && Array.isArray(hp.registrableDomain)) {
+        hp.registrableDomain.forEach((d, di) => {
+          if (typeof d === 'string' && !isValidRegistrableDomainEntry(d)) {
+            errors.push({
+              code: 'permission.network-dynamic.registrable_domain_invalid',
+              where: `${where}.hostPolicy.registrableDomain[${di}]`,
+              expected: 'a literal registrable domain (no wildcards, no leading/trailing dots)',
+              actual: `"${d}"`,
+              fixHint:
+                'Wildcards are not permitted; list the registrable domain literally (e.g. "acme.com", not "*.acme.com" or ".acme.com").',
+            });
+          }
+        });
+      }
     }
 
     if (perm.type === 'storage') {
