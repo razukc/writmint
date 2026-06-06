@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { matchesRegistrableDomain, isValidRegistrableDomainEntry } from '../../src/host-policy.js';
+import { matchesRegistrableDomain, isValidRegistrableDomainEntry, classifyHost, type HostKind } from '../../src/host-policy.js';
 
 describe('matchesRegistrableDomain', () => {
   it('matches an exact domain', () => {
@@ -68,5 +68,31 @@ describe('isValidRegistrableDomainEntry', () => {
 
   it('rejects scheme prefix', () => {
     expect(isValidRegistrableDomainEntry('https://acme.com')).toBe(false);
+  });
+});
+
+describe('classifyHost', () => {
+  it('returns ipv4 for a dotted-quad', () => {
+    expect(classifyHost('10.0.0.1')).toEqual<HostKind>({ kind: 'ipv4', ip: '10.0.0.1' });
+  });
+
+  it('returns ipv4 for a public dotted-quad', () => {
+    expect(classifyHost('8.8.8.8')).toEqual<HostKind>({ kind: 'ipv4', ip: '8.8.8.8' });
+  });
+
+  it('returns ipv6 for a bracketed v6 literal', () => {
+    expect(classifyHost('[::1]')).toEqual<HostKind>({ kind: 'ipv6', ip: '::1' });
+  });
+
+  it('returns ipv6 for a bracketed full v6 literal', () => {
+    expect(classifyHost('[2001:db8::1]')).toEqual<HostKind>({ kind: 'ipv6', ip: '2001:db8::1' });
+  });
+
+  it('returns hostname for a domain name', () => {
+    expect(classifyHost('status.acme.com')).toEqual<HostKind>({ kind: 'hostname', host: 'status.acme.com' });
+  });
+
+  it('lowercases the hostname', () => {
+    expect(classifyHost('Status.Acme.Com')).toEqual<HostKind>({ kind: 'hostname', host: 'status.acme.com' });
   });
 });
