@@ -71,7 +71,8 @@ export type Broker =
   | UiBroker;
 
 export interface NetworkTransport {
-  request(input: NetworkRequest): Promise<NetworkResponse>;
+  request(input: NetworkRequest & { resolvedIp?: string }): Promise<NetworkResponse>;
+  resolve?(hostname: string): Promise<string[]>;
 }
 
 export interface StorageTransport {
@@ -112,6 +113,18 @@ export function createPermissionRegistry(
   const byId = new Map<PermissionId, Permission>();
   for (const perm of manifest.permissions) {
     byId.set(perm.id, perm);
+  }
+
+  const hasDynamic = manifest.permissions.some((p) => p.type === 'network-dynamic');
+  if (hasDynamic && !transports.network?.resolve) {
+    throw new PermissionError({
+      code: 'permission.network.no_resolver',
+      where: 'createPermissionRegistry(transports)',
+      expected: 'HostTransports.network.resolve(hostname) => Promise<string[]>',
+      actual: transports.network ? 'transport.resolve is undefined' : 'transports.network is undefined',
+      fixHint:
+        'Provide HostTransports.network.resolve(hostname) => Promise<string[]>; required when any type:network-dynamic permission is declared on the manifest.',
+    });
   }
 
   const brokers = new Map<PermissionId, Broker>();
