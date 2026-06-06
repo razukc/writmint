@@ -424,6 +424,10 @@ function buildNetworkDynamicBroker(
         try {
           resolved = await transport.resolve(hostname);
         } catch (e) {
+          // A ReplayDivergenceError from a replay transport is a tape mismatch,
+          // not a DNS failure — re-throw unchanged so the divergence surfaces.
+          // Structural check (by name) avoids a circular import with replay.ts.
+          if (e instanceof Error && e.name === 'ReplayDivergenceError') throw e;
           throw new PermissionError({
             code: 'permission.network.resolve_failed',
             where: `cap("${id}").request.url`,

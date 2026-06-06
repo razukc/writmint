@@ -11,6 +11,7 @@ import { formatStructuredError, type StructuredError } from './errors.js';
 
 export type BrokerCallKind =
   | 'network.request'
+  | 'network.resolve'
   | 'storage.get'
   | 'storage.put'
   | 'storage.delete'
@@ -113,6 +114,24 @@ function wrapForRecord(base: HostTransports, entries: BrokerCallEntry[]): HostTr
         throw e;
       }
     },
+    // Only include resolve when the base transport has one, so transports
+    // without resolve stay shape-identical after wrapping (type:network
+    // registries must not suddenly see a resolve method appear).
+    ...(base.network.resolve
+      ? {
+          async resolve(hostname: string): Promise<string[]> {
+            const idx = entries.length;
+            try {
+              const output = await base.network!.resolve!(hostname);
+              entries.push({ index: idx, kind: 'network.resolve', input: { hostname }, output: jsonCanonical(output), threw: false });
+              return output;
+            } catch (e) {
+              entries.push({ index: idx, kind: 'network.resolve', input: { hostname }, output: serializeThrown(e), threw: true });
+              throw e;
+            }
+          },
+        }
+      : {}),
   };
 
   const storage: StorageTransport | undefined = base.storage && {
@@ -278,6 +297,11 @@ function buildReplayTransports(
       const entry = next('network.request', jsonCanonical(input));
       if (entry.threw) throw rehydrateThrown(entry.output);
       return entry.output as NetworkResponse;
+    },
+    async resolve(hostname: string): Promise<string[]> {
+      const entry = next('network.resolve', { hostname });
+      if (entry.threw) throw rehydrateThrown(entry.output);
+      return entry.output as string[];
     },
   };
 
