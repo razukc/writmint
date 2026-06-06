@@ -154,6 +154,28 @@ describe('network-dynamic broker — per-call checks', () => {
     await expect(call(m, makeTransport(), { url: 'https://status.acme.com:8443/', method: 'GET' })).resolves.toBeDefined();
   });
 
+  it('pairs default ports per scheme: https on port 80 is denied when port is unset', async () => {
+    const m = manifestWithPolicy({ registrableDomain: ['acme.com'], scheme: ['http', 'https'] });
+    await expect(call(m, makeTransport(), { url: 'https://status.acme.com:80/', method: 'GET' })).rejects.toMatchObject({
+      structured: { code: 'permission.network.port_denied' },
+    });
+  });
+
+  it('pairs default ports per scheme: http on 80 and https on 443 both pass when port is unset', async () => {
+    const m = manifestWithPolicy({ registrableDomain: ['acme.com'], scheme: ['http', 'https'] });
+    await expect(call(m, makeTransport(), { url: 'http://status.acme.com/', method: 'GET' })).resolves.toBeDefined();
+    await expect(call(m, makeTransport(), { url: 'https://status.acme.com/', method: 'GET' })).resolves.toBeDefined();
+  });
+
+  it('explicit port list applies to all schemes (no pairing)', async () => {
+    const m = manifestWithPolicy({ registrableDomain: ['acme.com'], scheme: ['http', 'https'], port: [8080] });
+    await expect(call(m, makeTransport(), { url: 'https://status.acme.com:8080/', method: 'GET' })).resolves.toBeDefined();
+    await expect(call(m, makeTransport(), { url: 'http://status.acme.com:8080/', method: 'GET' })).resolves.toBeDefined();
+    await expect(call(m, makeTransport(), { url: 'https://status.acme.com/', method: 'GET' })).rejects.toMatchObject({
+      structured: { code: 'permission.network.port_denied' },
+    });
+  });
+
   it('rejects a path outside pathPrefix', async () => {
     const m = manifestWithPolicy({ registrableDomain: ['acme.com'], pathPrefix: ['/api/v1/'] });
     await expect(call(m, makeTransport(), { url: 'https://status.acme.com/admin', method: 'GET' })).rejects.toMatchObject({

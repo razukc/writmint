@@ -283,9 +283,7 @@ function buildNetworkDynamicBroker(
   const policy = perm.hostPolicy;
   const allowedMethods = perm.methods ? new Set(perm.methods) : null;
   const effectiveScheme = new Set(policy.scheme ?? ['https']);
-  const effectivePort = new Set(
-    policy.port ?? Array.from(effectiveScheme).map((s) => (s === 'https' ? 443 : 80))
-  );
+  const explicitPort = policy.port ? new Set(policy.port) : null;
   const denyPrivate = policy.denyPrivate ?? true;
 
   return {
@@ -335,14 +333,25 @@ function buildNetworkDynamicBroker(
         });
       }
 
-      const port = parsed.port ? Number(parsed.port) : scheme === 'https' ? 443 : 80;
-      if (!effectivePort.has(port)) {
+      const schemeDefaultPort = scheme === 'https' ? 443 : 80;
+      const port = parsed.port ? Number(parsed.port) : schemeDefaultPort;
+      // When policy.port is unset, the default pairs per scheme: an https request
+      // only matches 443 and an http request only matches 80 — never the union.
+      const portAllowed = explicitPort ? explicitPort.has(port) : port === schemeDefaultPort;
+      if (!portAllowed) {
+        const expectedPorts = explicitPort
+          ? `port in [${[...explicitPort].join(', ')}]`
+          : `port in [${schemeDefaultPort}] (default for ${scheme})`;
         throw new PermissionError({
           code: 'permission.network.port_denied',
           where: `cap("${id}").request.url`,
-          expected: `port in [${[...effectivePort].join(', ')}]`,
+          expected: expectedPorts,
           actual: String(port),
-          fixHint: `Use a port in [${[...effectivePort].join(', ')}], or add ${port} to "${id}".hostPolicy.port.`,
+          fixHint: `Use ${
+            explicitPort
+              ? `a port in [${[...explicitPort].join(', ')}]`
+              : `port ${schemeDefaultPort} for ${scheme}`
+          }, or add ${port} to "${id}".hostPolicy.port.`,
         });
       }
 
