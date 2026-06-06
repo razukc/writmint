@@ -194,3 +194,107 @@ describe('network-dynamic broker — per-call checks', () => {
     });
   });
 });
+
+describe('network-dynamic broker — resolve + private-IP filter + pin', () => {
+  it('resolves the hostname and passes resolvedIp to transport.request', async () => {
+    const seen: Array<NetworkRequest & { resolvedIp?: string }> = [];
+    const transport: NetworkTransport = {
+      async resolve() { return ['203.0.113.1']; },
+      async request(input) { seen.push(input); return { status: 200, headers: {}, body: null }; },
+    };
+    const m = manifestWithPolicy({ registrableDomain: ['acme.com'] });
+    await call(m, transport, { url: 'https://status.acme.com/', method: 'GET' });
+    expect(seen).toHaveLength(1);
+    expect(seen[0].resolvedIp).toBe('203.0.113.1');
+  });
+
+  it('rejects when hostname resolves to a private IP (denyPrivate default true)', async () => {
+    const transport: NetworkTransport = {
+      async resolve() { return ['10.0.0.42']; },
+      async request() { throw new Error('should not be called'); },
+    };
+    const m = manifestWithPolicy({ registrableDomain: ['acme.com'] });
+    await expect(call(m, transport, { url: 'https://status.acme.com/', method: 'GET' })).rejects.toMatchObject({
+      structured: { code: 'permission.network.resolved_to_private' },
+    });
+  });
+
+  it('rejects when any resolved IP is private (conservative)', async () => {
+    const transport: NetworkTransport = {
+      async resolve() { return ['203.0.113.1', '10.0.0.1']; },
+      async request() { throw new Error('should not be called'); },
+    };
+    const m = manifestWithPolicy({ registrableDomain: ['acme.com'] });
+    await expect(call(m, transport, { url: 'https://status.acme.com/', method: 'GET' })).rejects.toMatchObject({
+      structured: { code: 'permission.network.resolved_to_private' },
+    });
+  });
+
+  it('allows private resolution when denyPrivate=false', async () => {
+    const seen: Array<NetworkRequest & { resolvedIp?: string }> = [];
+    const transport: NetworkTransport = {
+      async resolve() { return ['10.0.0.42']; },
+      async request(input) { seen.push(input); return { status: 200, headers: {}, body: null }; },
+    };
+    const m = manifestWithPolicy({ registrableDomain: ['acme.com'], denyPrivate: false });
+    await call(m, transport, { url: 'https://status.acme.com/', method: 'GET' });
+    expect(seen[0].resolvedIp).toBe('10.0.0.42');
+  });
+
+  it('rejects when transport.resolve throws', async () => {
+    const transport: NetworkTransport = {
+      async resolve() { throw new Error('ENOTFOUND'); },
+      async request() { throw new Error('should not be called'); },
+    };
+    const m = manifestWithPolicy({ registrableDomain: ['acme.com'] });
+    await expect(call(m, transport, { url: 'https://status.acme.com/', method: 'GET' })).rejects.toMatchObject({
+      structured: { code: 'permission.network.resolve_failed' },
+    });
+  });
+
+  it('rejects when transport.resolve returns an empty array', async () => {
+    const transport: NetworkTransport = {
+      async resolve() { return []; },
+      async request() { throw new Error('should not be called'); },
+    };
+    const m = manifestWithPolicy({ registrableDomain: ['acme.com'] });
+    await expect(call(m, transport, { url: 'https://status.acme.com/', method: 'GET' })).rejects.toMatchObject({
+      structured: { code: 'permission.network.resolve_failed' },
+    });
+  });
+
+  it('memoizes the resolve within a single action scope', async () => {
+    let resolveCalls = 0;
+    const transport: NetworkTransport = {
+      async resolve() { resolveCalls++; return ['203.0.113.1']; },
+      async request() { return { status: 200, headers: {}, body: null }; },
+    };
+    const m = manifestWithPolicy({ registrableDomain: ['acme.com'] });
+    const reg = createPermissionRegistry(m, { network: transport });
+    const scope = reg.forAction('ops.dyn.go');
+    const cap = scope.cap('net.dyn') as { request: (i: NetworkRequest) => Promise<NetworkResponse> };
+    await cap.request({ url: 'https://status.acme.com/a', method: 'GET' });
+    await cap.request({ url: 'https://status.acme.com/b', method: 'GET' });
+    expect(resolveCalls).toBe(1);
+  });
+
+  it('does not memoize across action scopes', async () => {
+    let resolveCalls = 0;
+    const transport: NetworkTransport = {
+      async resolve() { resolveCalls++; return ['203.0.113.1']; },
+      async request() { return { status: 200, headers: {}, body: null }; },
+    };
+    const m = manifestWithPolicy({ registrableDomain: ['acme.com'] });
+    const reg = createPermissionRegistry(m, { network: transport });
+
+    const scopeA = reg.forAction('ops.dyn.go');
+    const capA = scopeA.cap('net.dyn') as { request: (i: NetworkRequest) => Promise<NetworkResponse> };
+    await capA.request({ url: 'https://status.acme.com/', method: 'GET' });
+
+    const scopeB = reg.forAction('ops.dyn.go');
+    const capB = scopeB.cap('net.dyn') as { request: (i: NetworkRequest) => Promise<NetworkResponse> };
+    await capB.request({ url: 'https://status.acme.com/', method: 'GET' });
+
+    expect(resolveCalls).toBe(2);
+  });
+});

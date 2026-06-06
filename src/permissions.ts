@@ -279,7 +279,6 @@ function buildNetworkDynamicBroker(
   transport: NetworkTransport | undefined,
   memo: Map<string, string[]>
 ): NetworkBroker {
-  void memo; // resolve memoization is wired in the resolve step
   const id = perm.id;
   const policy = perm.hostPolicy;
   const allowedMethods = perm.methods ? new Set(perm.methods) : null;
@@ -398,7 +397,65 @@ function buildNetworkDynamicBroker(
         });
       }
 
-      return transport.request({ ...input });
+      // Resolve (memoized per action scope, keyed by permission id + hostname)
+      const memoKey = `${id}|${hostname}`;
+      let ips = memo.get(memoKey);
+      if (!ips) {
+        if (!transport.resolve) {
+          // Defensive — construction-time check should have caught this.
+          throw new PermissionError({
+            code: 'permission.network.no_resolver',
+            where: `cap("${id}").request`,
+            expected: 'HostTransports.network.resolve(hostname) => Promise<string[]>',
+            actual: 'transport.resolve is undefined',
+            fixHint: 'Provide HostTransports.network.resolve when any type:network-dynamic permission is declared.',
+          });
+        }
+        let resolved: string[];
+        try {
+          resolved = await transport.resolve(hostname);
+        } catch (e) {
+          throw new PermissionError({
+            code: 'permission.network.resolve_failed',
+            where: `cap("${id}").request.url`,
+            expected: 'a successful DNS resolution',
+            actual: `transport.resolve("${hostname}") threw: ${e instanceof Error ? e.message : String(e)}`,
+            fixHint:
+              `DNS resolution for "${hostname}" failed. Verify the hostname is correct and the network transport can reach a resolver.`,
+          });
+        }
+        if (!resolved || resolved.length === 0) {
+          throw new PermissionError({
+            code: 'permission.network.resolve_failed',
+            where: `cap("${id}").request.url`,
+            expected: 'at least one resolved address',
+            actual: `transport.resolve("${hostname}") returned []`,
+            fixHint:
+              `DNS resolution for "${hostname}" returned no addresses. Verify the hostname is correct and the network transport can reach a resolver.`,
+          });
+        }
+        ips = resolved;
+        memo.set(memoKey, ips);
+      }
+
+      if (denyPrivate) {
+        for (const ip of ips) {
+          const r = isPrivateIp(ip);
+          if (r.private) {
+            throw new PermissionError({
+              code: 'permission.network.resolved_to_private',
+              where: `cap("${id}").request.url`,
+              expected: 'hostname resolving to non-private IPs (hostPolicy.denyPrivate=true)',
+              actual: `"${hostname}" resolved to ${ip} (${r.range})`,
+              fixHint:
+                `Hostname "${hostname}" resolved to a private IP. If this is your intended internal target, set "${id}".hostPolicy.denyPrivate=false; otherwise this hostname's DNS points inside a private network and the call is unsafe.`,
+            });
+          }
+        }
+      }
+
+      // Pin the first surviving IP so the transport cannot re-resolve (rebinding defense).
+      return transport.request({ ...input, resolvedIp: ips[0] });
     },
   };
 }
