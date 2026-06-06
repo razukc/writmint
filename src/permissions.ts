@@ -3,11 +3,13 @@ import type {
   PermissionId,
   HttpMethod,
   NetworkPermission,
+  NetworkDynamicPermission,
   StoragePermission,
   StorageMode,
   ActionManifest,
   CapabilityManifest,
 } from './capability-manifest.js';
+import { classifyHost, isPrivateIp, matchesRegistrableDomain } from './host-policy.js';
 import { formatStructuredError, type StructuredError } from './errors.js';
 
 export type { StructuredError };
@@ -127,11 +129,6 @@ export function createPermissionRegistry(
     });
   }
 
-  const brokers = new Map<PermissionId, Broker>();
-  for (const perm of manifest.permissions) {
-    brokers.set(perm.id, buildBroker(perm, transports));
-  }
-
   const actionsById = new Map<string, ActionManifest>();
   for (const a of manifest.actions) actionsById.set(a.id, a);
 
@@ -158,6 +155,13 @@ export function createPermissionRegistry(
             fixHint: `Declare a permission with id "${ref}" or remove the reference.`,
           });
         }
+      }
+
+      // Per-action-scope memo for dynamic-host resolves. Lifetime = this scope.
+      const memo = new Map<string, string[]>();
+      const brokers = new Map<PermissionId, Broker>();
+      for (const perm of manifest.permissions) {
+        brokers.set(perm.id, buildBroker(perm, transports, memo));
       }
 
       return {
@@ -200,19 +204,16 @@ export function createPermissionRegistry(
   };
 }
 
-function buildBroker(perm: Permission, transports: HostTransports): Broker {
+function buildBroker(
+  perm: Permission,
+  transports: HostTransports,
+  memo: Map<string, string[]>
+): Broker {
   switch (perm.type) {
     case 'network':
       return buildNetworkBroker(perm, transports.network);
     case 'network-dynamic':
-      throw new PermissionError({
-        code: 'permission.network-dynamic.not_implemented',
-        where: `permissions[id=${perm.id}]`,
-        expected: 'a runtime version that implements network-dynamic brokers',
-        actual: 'network-dynamic broker not implemented yet',
-        fixHint:
-          'network-dynamic brokers are not yet supported by this runtime version; use type:network for now.',
-      });
+      return buildNetworkDynamicBroker(perm, transports.network, memo);
     case 'storage':
       return buildStorageBroker(perm, transports.storage);
     case 'clock':
@@ -269,6 +270,135 @@ function buildNetworkBroker(perm: NetworkPermission, transport?: NetworkTranspor
         });
       }
       return transport.request(input);
+    },
+  };
+}
+
+function buildNetworkDynamicBroker(
+  perm: NetworkDynamicPermission,
+  transport: NetworkTransport | undefined,
+  memo: Map<string, string[]>
+): NetworkBroker {
+  void memo; // resolve memoization is wired in the resolve step
+  const id = perm.id;
+  const policy = perm.hostPolicy;
+  const allowedMethods = perm.methods ? new Set(perm.methods) : null;
+  const effectiveScheme = new Set(policy.scheme ?? ['https']);
+  const effectivePort = new Set(
+    policy.port ?? Array.from(effectiveScheme).map((s) => (s === 'https' ? 443 : 80))
+  );
+  const denyPrivate = policy.denyPrivate ?? true;
+
+  return {
+    permissionId: id,
+    async request(input: NetworkRequest): Promise<NetworkResponse> {
+      if (!transport) {
+        throw new PermissionError({
+          code: 'permission.network.no_transport',
+          where: `cap("${id}").request`,
+          expected: 'a network transport provided to the runtime',
+          actual: 'undefined',
+          fixHint: 'Provide HostTransports.network when constructing the runtime.',
+        });
+      }
+
+      let parsed: URL;
+      try {
+        parsed = new URL(input.url);
+      } catch {
+        throw new PermissionError({
+          code: 'permission.network.bad_url',
+          where: `cap("${id}").request.url`,
+          expected: 'an absolute URL with a host (https://host/path)',
+          actual: input.url,
+          fixHint: 'Pass an absolute URL whose host satisfies the permission hostPolicy.',
+        });
+      }
+
+      if (allowedMethods && !allowedMethods.has(input.method)) {
+        throw new PermissionError({
+          code: 'permission.network.method_denied',
+          where: `cap("${id}").request.method`,
+          expected: `method in [${[...allowedMethods].join(', ')}]`,
+          actual: input.method,
+          fixHint: `Use a declared method, or add "${input.method}" to permission "${id}".methods.`,
+        });
+      }
+
+      const scheme = parsed.protocol.replace(/:$/, '');
+      if (!effectiveScheme.has(scheme as 'http' | 'https')) {
+        throw new PermissionError({
+          code: 'permission.network.scheme_denied',
+          where: `cap("${id}").request.url`,
+          expected: `scheme in [${[...effectiveScheme].join(', ')}]`,
+          actual: scheme,
+          fixHint: `Use a scheme in [${[...effectiveScheme].join(', ')}], or add "${scheme}" to "${id}".hostPolicy.scheme.`,
+        });
+      }
+
+      const port = parsed.port ? Number(parsed.port) : scheme === 'https' ? 443 : 80;
+      if (!effectivePort.has(port)) {
+        throw new PermissionError({
+          code: 'permission.network.port_denied',
+          where: `cap("${id}").request.url`,
+          expected: `port in [${[...effectivePort].join(', ')}]`,
+          actual: String(port),
+          fixHint: `Use a port in [${[...effectivePort].join(', ')}], or add ${port} to "${id}".hostPolicy.port.`,
+        });
+      }
+
+      if (policy.pathPrefix && policy.pathPrefix.length > 0) {
+        const path = parsed.pathname;
+        if (!policy.pathPrefix.some((p) => path.startsWith(p))) {
+          throw new PermissionError({
+            code: 'permission.network.path_denied',
+            where: `cap("${id}").request.url`,
+            expected: `path starting with one of [${policy.pathPrefix.join(', ')}]`,
+            actual: path,
+            fixHint: `Use a path under one of [${policy.pathPrefix.join(', ')}], or add a prefix to "${id}".hostPolicy.pathPrefix.`,
+          });
+        }
+      }
+
+      // URL.hostname drops the port but keeps IPv6 brackets, which classifyHost expects.
+      const hostKind = classifyHost(parsed.hostname);
+      if (hostKind.kind === 'ipv4' || hostKind.kind === 'ipv6') {
+        const literal = hostKind.ip;
+        if (denyPrivate) {
+          const r = isPrivateIp(literal);
+          if (r.private) {
+            throw new PermissionError({
+              code: 'permission.network.private_ip_literal',
+              where: `cap("${id}").request.url`,
+              expected: 'a non-private host (hostPolicy.denyPrivate=true)',
+              actual: `${literal} is in ${r.range}`,
+              fixHint:
+                `Private IP literals are denied by default. If this internal target is intended, set "${id}".hostPolicy.denyPrivate=false; otherwise use a hostname under "${id}".hostPolicy.registrableDomain.`,
+            });
+          }
+        }
+        throw new PermissionError({
+          code: 'permission.network.host_policy_denied',
+          where: `cap("${id}").request.url`,
+          expected: `host under one of [${policy.registrableDomain.join(', ')}]`,
+          actual: `IP literal ${literal}`,
+          fixHint:
+            `IP literals are not supported by this policy shape; hostPolicy.registrableDomain matches hostnames only. Use a hostname under one of [${policy.registrableDomain.join(', ')}].`,
+        });
+      }
+
+      const hostname = hostKind.host;
+      if (!matchesRegistrableDomain(hostname, policy.registrableDomain)) {
+        throw new PermissionError({
+          code: 'permission.network.host_policy_denied',
+          where: `cap("${id}").request.url`,
+          expected: `host under one of [${policy.registrableDomain.join(', ')}]`,
+          actual: hostname,
+          fixHint: `Pass a URL under one of [${policy.registrableDomain.join(', ')}], or add the registrable domain of "${hostname}" to "${id}".hostPolicy.registrableDomain.`,
+        });
+      }
+
+      return transport.request({ ...input });
     },
   };
 }
