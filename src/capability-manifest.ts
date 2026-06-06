@@ -324,7 +324,7 @@ export function hardenManifest(
             expected: 'exact hostname (no wildcards)',
             actual: `"${h}"`,
             fixHint:
-              'List each allowed hostname explicitly; wildcards make the call surface impossible to audit.',
+              "List each allowed hostname explicitly; wildcards make the call surface impossible to audit. If the URL is supplied at call time (the host isn't known at author time), use type:network-dynamic with hostPolicy.registrableDomain instead.",
           });
         }
       });

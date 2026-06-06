@@ -132,6 +132,27 @@ describe('hardenManifest — permission.network.host_wildcard', () => {
   });
 });
 
+describe('hardenManifest — host_wildcard fixHint routes dynamic authors', () => {
+  it('mentions network-dynamic in the fixHint', () => {
+    const m = baseManifest({
+      permissions: [
+        {
+          type: 'network',
+          id: 'net.read',
+          hosts: ['*.acme.com'],
+          methods: ['GET'],
+          reason: 'Read records under acme.com needed by load action.',
+        },
+      ],
+    });
+    const { errors } = hardenManifest(m);
+    const e = errors.find((x) => x.code === 'permission.network.host_wildcard');
+    expect(e).toBeDefined();
+    expect(e!.fixHint).toMatch(/network-dynamic/);
+    expect(e!.fixHint).toMatch(/hostPolicy/);
+  });
+});
+
 describe('hardenManifest — permission.storage.scope_wildcard', () => {
   it('flags wildcards in storage scope', () => {
     const m = baseManifest({
