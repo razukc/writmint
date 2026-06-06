@@ -76,3 +76,9 @@ The structured-error contract effectively teaches the schema. Without ever readi
 5. **Reject unknown fields at the structural validator** (new — pass 05). Currently `kind`, `title` on actions, `additionalProperties: false`, etc. pass silently. A `manifest.unknown_field` warning (or error) with `where` pointing at the offending field would close the "looks accepted but ignored" footgun.
 
 This is now the **sixth** v0.3 candidate from the dogfood corpus — building on the five in `fixtures/DOGFOOD-SUMMARY.md`.
+
+## Open: rerun pass 05 against the updated `host_wildcard` fix-hint
+
+The 4-round-trip / 16-code recovery loop documented above hit a wall at `permission.network.host_wildcard`: the fix-hint named the rule but couldn't steer the agent toward a usable shape when the URL is user-supplied at call time — the agent invented hostnames.
+
+After the dynamic-host feature, the `host_wildcard` fix-hint routes to `type:network-dynamic` with `hostPolicy.registrableDomain`. Rerun expectation: the agent encounters `host_wildcard`, the hint routes to the new shape, the second author pass lands a policy that passes hardening. Target ceiling: **≤2 round-trips, ≤4 codes** (vs the original 4 / 16). Capture actual numbers in a new section here when the rerun lands.
