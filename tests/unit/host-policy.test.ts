@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { matchesRegistrableDomain, isValidRegistrableDomainEntry, classifyHost, type HostKind } from '../../src/host-policy.js';
+import { matchesRegistrableDomain, isValidRegistrableDomainEntry, classifyHost, type HostKind, isPrivateIp } from '../../src/host-policy.js';
 
 describe('matchesRegistrableDomain', () => {
   it('matches an exact domain', () => {
@@ -94,5 +94,45 @@ describe('classifyHost', () => {
 
   it('lowercases the hostname', () => {
     expect(classifyHost('Status.Acme.Com')).toEqual<HostKind>({ kind: 'hostname', host: 'status.acme.com' });
+  });
+});
+
+describe('isPrivateIp', () => {
+  it.each([
+    ['10.0.0.1',      'rfc1918-10/8'],
+    ['10.255.255.255','rfc1918-10/8'],
+    ['172.16.0.1',    'rfc1918-172.16/12'],
+    ['172.31.255.254','rfc1918-172.16/12'],
+    ['192.168.0.1',   'rfc1918-192.168/16'],
+    ['127.0.0.1',     'loopback-127/8'],
+    ['169.254.0.1',   'link-local-169.254/16'],
+  ])('rejects IPv4 %s as %s', (ip, range) => {
+    expect(isPrivateIp(ip)).toEqual({ private: true, range });
+  });
+
+  it.each([
+    ['8.8.8.8'],
+    ['203.0.113.1'],
+    ['172.15.0.1'],
+    ['172.32.0.1'],
+    ['169.253.0.1'],
+  ])('passes IPv4 %s', (ip) => {
+    expect(isPrivateIp(ip)).toEqual({ private: false });
+  });
+
+  it.each([
+    ['::1',          'loopback-::1'],
+    ['fc00::1',      'unique-local-fc00::/7'],
+    ['fd12:3456::1', 'unique-local-fc00::/7'],
+    ['fe80::1',      'link-local-fe80::/10'],
+  ])('rejects IPv6 %s as %s', (ip, range) => {
+    expect(isPrivateIp(ip)).toEqual({ private: true, range });
+  });
+
+  it.each([
+    ['2001:db8::1'],
+    ['2606:4700:4700::1111'],
+  ])('passes IPv6 %s', (ip) => {
+    expect(isPrivateIp(ip)).toEqual({ private: false });
   });
 });
