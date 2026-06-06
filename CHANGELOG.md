@@ -12,14 +12,21 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   (registrable-domain suffix list, scheme/port narrowing, default-on
   `denyPrivate`, optional `pathPrefix`). The per-call broker resolves
   the hostname once via `NetworkTransport.resolve()`, rejects if any
-  resolved IP is in a private/loopback/link-local range, and pins the
-  surviving IP into the request so the transport cannot re-resolve
-  into a DNS-rebinding target. `scheme` defaults to https-only when
-  unset; default ports pair per scheme (https→443, http→80) when
-  `port` is unset.
+  resolved IP is in a private/loopback/link-local/CGNAT range, and
+  pins the surviving IP into the request (`resolvedIp`); a conforming
+  transport connects to exactly that address rather than re-resolving
+  (DNS-rebinding defense — a transport conformance requirement, see
+  `NetworkTransport` docs). Transports must also not auto-follow
+  redirects: each 3xx hop must re-enter the broker to be
+  policy-checked. `scheme` defaults to https-only when unset; default
+  ports pair per scheme (https→443, http→80) when `port` is unset.
 - New `src/host-policy.ts` module: label-boundary registrable-domain
   matcher, IP-literal classifier, private-range check (incl.
-  IPv4-mapped IPv6 and unspecified addresses).
+  IPv4-mapped IPv6 and unspecified addresses). IPv6 classification is
+  parser-based — expanded/uncompressed/uppercase resolver output lands
+  in the same ranges as canonical spellings, and strings that parse as
+  neither IPv4 nor IPv6 fail closed at the broker
+  (`permission.network.resolve_failed`).
 - New tape event `network.resolve`. Tapes from `network`-only
   manifests are unchanged. Replay divergences surface unchanged
   through the broker (never wrapped as `resolve_failed`).
