@@ -668,29 +668,128 @@ function validatePermission(
         }
       });
     }
-    if (p.methods !== undefined) {
-      if (!Array.isArray(p.methods)) {
+    validateMethods(p.methods, where, push);
+  }
+
+  if (type === 'network-dynamic') {
+    if (!isPlainObject(p.hostPolicy)) {
+      push({
+        code: 'permission.network-dynamic.host_policy',
+        where: `${where}.hostPolicy`,
+        expected: 'object',
+        actual: typeOf(p.hostPolicy),
+        fixHint: 'Add a hostPolicy object with at least { registrableDomain: ["example.com"] }.',
+      });
+    } else {
+      const hp = p.hostPolicy as Record<string, unknown>;
+      const hpWhere = `${where}.hostPolicy`;
+
+      if (!Array.isArray(hp.registrableDomain) || hp.registrableDomain.length === 0) {
         push({
-          code: 'permission.network.methods',
-          where: `${where}.methods`,
-          expected: 'array of HTTP methods',
-          actual: typeOf(p.methods),
-          fixHint: `Use a subset of ${HTTP_METHODS.join(', ')}.`,
+          code: 'permission.network-dynamic.registrable_domain',
+          where: `${hpWhere}.registrableDomain`,
+          expected: 'non-empty string array',
+          actual: typeOf(hp.registrableDomain),
+          fixHint: 'Declare at least one registrable domain (e.g. ["acme.com"]).',
         });
       } else {
-        p.methods.forEach((mm, i) => {
-          if (typeof mm !== 'string' || !HTTP_METHODS.includes(mm as HttpMethod)) {
+        hp.registrableDomain.forEach((d, i) => {
+          if (typeof d !== 'string' || d.length === 0) {
             push({
-              code: 'permission.network.method_value',
-              where: `${where}.methods[${i}]`,
-              expected: `one of ${HTTP_METHODS.join(', ')}`,
-              actual: String(mm),
-              fixHint: 'Use a supported HTTP method.',
+              code: 'permission.network-dynamic.registrable_domain_value',
+              where: `${hpWhere}.registrableDomain[${i}]`,
+              expected: 'non-empty string',
+              actual: typeOf(d),
+              fixHint: 'Each entry must be a non-empty string (e.g. "acme.com").',
             });
           }
         });
       }
+
+      if (hp.scheme !== undefined) {
+        if (!Array.isArray(hp.scheme)) {
+          push({
+            code: 'permission.network-dynamic.scheme',
+            where: `${hpWhere}.scheme`,
+            expected: 'array of "http" | "https"',
+            actual: typeOf(hp.scheme),
+            fixHint: 'Use an array containing "http" and/or "https", or omit it.',
+          });
+        } else {
+          hp.scheme.forEach((s, i) => {
+            if (s !== 'http' && s !== 'https') {
+              push({
+                code: 'permission.network-dynamic.scheme_value',
+                where: `${hpWhere}.scheme[${i}]`,
+                expected: '"http" or "https"',
+                actual: typeof s === 'string' ? `"${s}"` : typeOf(s),
+                fixHint: 'Use "http" or "https"; other schemes are not supported.',
+              });
+            }
+          });
+        }
+      }
+
+      if (hp.port !== undefined) {
+        if (!Array.isArray(hp.port)) {
+          push({
+            code: 'permission.network-dynamic.port',
+            where: `${hpWhere}.port`,
+            expected: 'array of port numbers',
+            actual: typeOf(hp.port),
+            fixHint: 'Use an array of integers in 1..65535, or omit it.',
+          });
+        } else {
+          hp.port.forEach((pn, i) => {
+            if (typeof pn !== 'number' || !Number.isInteger(pn) || pn < 1 || pn > 65535) {
+              push({
+                code: 'permission.network-dynamic.port_value',
+                where: `${hpWhere}.port[${i}]`,
+                expected: 'integer in 1..65535',
+                actual: typeof pn === 'number' ? String(pn) : typeOf(pn),
+                fixHint: 'Each port must be an integer between 1 and 65535.',
+              });
+            }
+          });
+        }
+      }
+
+      if (hp.denyPrivate !== undefined && typeof hp.denyPrivate !== 'boolean') {
+        push({
+          code: 'permission.network-dynamic.deny_private',
+          where: `${hpWhere}.denyPrivate`,
+          expected: 'boolean',
+          actual: typeOf(hp.denyPrivate),
+          fixHint: 'Use true (default) or false; omit to keep the safe default.',
+        });
+      }
+
+      if (hp.pathPrefix !== undefined) {
+        if (!Array.isArray(hp.pathPrefix)) {
+          push({
+            code: 'permission.network-dynamic.path_prefix',
+            where: `${hpWhere}.pathPrefix`,
+            expected: 'array of path prefixes',
+            actual: typeOf(hp.pathPrefix),
+            fixHint: 'Use an array of strings starting with "/", or omit it.',
+          });
+        } else {
+          hp.pathPrefix.forEach((pp, i) => {
+            if (typeof pp !== 'string' || !pp.startsWith('/')) {
+              push({
+                code: 'permission.network-dynamic.path_prefix_value',
+                where: `${hpWhere}.pathPrefix[${i}]`,
+                expected: 'string starting with "/"',
+                actual: typeof pp === 'string' ? `"${pp}"` : typeOf(pp),
+                fixHint: 'Each prefix must start with "/" (e.g. "/api/v1/").',
+              });
+            }
+          });
+        }
+      }
     }
+
+    validateMethods(p.methods, where, push);
   }
 
   if (type === 'storage') {
@@ -705,6 +804,38 @@ function validatePermission(
       });
     }
   }
+}
+
+// Shared by type:network and type:network-dynamic — both constrain HTTP
+// methods identically, and both report under the permission.network.* codes
+// so a fix learned on one type transfers to the other.
+function validateMethods(
+  methods: unknown,
+  where: string,
+  push: (e: ManifestError) => void
+): void {
+  if (methods === undefined) return;
+  if (!Array.isArray(methods)) {
+    push({
+      code: 'permission.network.methods',
+      where: `${where}.methods`,
+      expected: 'array of HTTP methods',
+      actual: typeOf(methods),
+      fixHint: `Use a subset of ${HTTP_METHODS.join(', ')}.`,
+    });
+    return;
+  }
+  methods.forEach((mm, i) => {
+    if (typeof mm !== 'string' || !HTTP_METHODS.includes(mm as HttpMethod)) {
+      push({
+        code: 'permission.network.method_value',
+        where: `${where}.methods[${i}]`,
+        expected: `one of ${HTTP_METHODS.join(', ')}`,
+        actual: String(mm),
+        fixHint: 'Use a supported HTTP method.',
+      });
+    }
+  });
 }
 
 function validateAction(
