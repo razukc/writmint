@@ -72,6 +72,18 @@ export type Broker =
   | AuditBroker
   | UiBroker;
 
+/**
+ * Host-provided network transport. Two conformance requirements that the
+ * broker cannot enforce mechanically:
+ *
+ * - The transport MUST NOT auto-follow redirects. Surface 3xx responses to
+ *   the caller; each redirect hop must re-enter the broker so its target is
+ *   policy-checked like any other request.
+ * - When `resolvedIp` is present on the request input, the transport MUST
+ *   connect to exactly that address instead of re-resolving the hostname.
+ *   The broker pins the IP it vetted; a transport that resolves again can be
+ *   steered to a different (DNS-rebinding) target after the check.
+ */
 export interface NetworkTransport {
   request(input: NetworkRequest & { resolvedIp?: string }): Promise<NetworkResponse>;
   resolve?(hostname: string): Promise<string[]>;
@@ -374,7 +386,7 @@ function buildNetworkDynamicBroker(
         const literal = hostKind.ip;
         if (denyPrivate) {
           const r = isPrivateIp(literal);
-          if (r.private) {
+          if (r.private === true) {
             throw new PermissionError({
               code: 'permission.network.private_ip_literal',
               where: `cap("${id}").request.url`,
@@ -452,23 +464,35 @@ function buildNetworkDynamicBroker(
         memo.set(memoKey, ips);
       }
 
-      if (denyPrivate) {
-        for (const ip of ips) {
-          const r = isPrivateIp(ip);
-          if (r.private) {
-            throw new PermissionError({
-              code: 'permission.network.resolved_to_private',
-              where: `cap("${id}").request.url`,
-              expected: 'hostname resolving to non-private IPs (hostPolicy.denyPrivate=true)',
-              actual: `"${hostname}" resolved to ${ip} (${r.range})`,
-              fixHint:
-                `Hostname "${hostname}" resolved to a private IP. If this is your intended internal target, set "${id}".hostPolicy.denyPrivate=false; otherwise this hostname's DNS points inside a private network and the call is unsafe.`,
-            });
-          }
+      for (const ip of ips) {
+        const r = isPrivateIp(ip);
+        // Fail closed on resolver output that is not a valid IP: treating an
+        // unparseable string as public would be a hole, and connecting to it
+        // is undefined anyway. Checked regardless of denyPrivate.
+        if (r.private === 'unparseable') {
+          throw new PermissionError({
+            code: 'permission.network.resolve_failed',
+            where: `cap("${id}").request.url`,
+            expected: 'transport.resolve to return valid IPv4/IPv6 address strings',
+            actual: `transport.resolve("${hostname}") returned "${ip}", which is not a valid IP address`,
+            fixHint:
+              'The network transport returned a non-IP string from resolve(). Fix the transport to return dotted-quad IPv4 or valid IPv6 strings.',
+          });
+        }
+        if (denyPrivate && r.private) {
+          throw new PermissionError({
+            code: 'permission.network.resolved_to_private',
+            where: `cap("${id}").request.url`,
+            expected: 'hostname resolving to non-private IPs (hostPolicy.denyPrivate=true)',
+            actual: `"${hostname}" resolved to ${ip} (${r.range})`,
+            fixHint:
+              `Hostname "${hostname}" resolved to a private IP. If this is your intended internal target, set "${id}".hostPolicy.denyPrivate=false; otherwise this hostname's DNS points inside a private network and the call is unsafe.`,
+          });
         }
       }
 
-      // Pin the first surviving IP so the transport cannot re-resolve (rebinding defense).
+      // Pin the first surviving IP; a conforming transport connects to exactly
+      // this address rather than re-resolving (see NetworkTransport docs).
       return transport.request({ ...input, resolvedIp: ips[0] });
     },
   };

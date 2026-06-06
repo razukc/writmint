@@ -209,6 +209,38 @@ describe('network-dynamic broker — per-call checks', () => {
     });
   });
 
+  it('rejects the IPv6 loopback literal [::1]', async () => {
+    const m = manifestWithPolicy({ registrableDomain: ['acme.com'] });
+    await expect(call(m, makeTransport(), { url: 'https://[::1]/', method: 'GET' })).rejects.toMatchObject({
+      structured: { code: 'permission.network.private_ip_literal' },
+    });
+  });
+
+  it('accepts an explicit :443 on https when port is unset (URL normalizes default ports away)', async () => {
+    // Pins the WHATWG normalization the port check relies on.
+    expect(new URL('https://status.acme.com:443/').port).toBe('');
+    const m = manifestWithPolicy({ registrableDomain: ['acme.com'] });
+    await expect(call(m, makeTransport(), { url: 'https://status.acme.com:443/', method: 'GET' })).resolves.toBeDefined();
+  });
+
+  // pathPrefix checks run on URL.pathname, which resolves dot segments —
+  // pinned here like the octal-IPv4 normalization test in host-policy.test.ts.
+  it('rejects pathPrefix escape via dot-segment traversal', async () => {
+    expect(new URL('https://status.acme.com/api/../private').pathname).toBe('/private');
+    const m = manifestWithPolicy({ registrableDomain: ['acme.com'], pathPrefix: ['/api'] });
+    await expect(call(m, makeTransport(), { url: 'https://status.acme.com/api/../private', method: 'GET' })).rejects.toMatchObject({
+      structured: { code: 'permission.network.path_denied' },
+    });
+  });
+
+  it('rejects pathPrefix escape via percent-encoded dot segments', async () => {
+    expect(new URL('https://status.acme.com/api/%2e%2e/private').pathname).toBe('/private');
+    const m = manifestWithPolicy({ registrableDomain: ['acme.com'], pathPrefix: ['/api'] });
+    await expect(call(m, makeTransport(), { url: 'https://status.acme.com/api/%2e%2e/private', method: 'GET' })).rejects.toMatchObject({
+      structured: { code: 'permission.network.path_denied' },
+    });
+  });
+
   it('rejects an IP-literal public host via suffix mismatch (denyPrivate=false)', async () => {
     const m = manifestWithPolicy({ registrableDomain: ['acme.com'], denyPrivate: false });
     await expect(call(m, makeTransport(), { url: 'https://8.8.8.8/', method: 'GET' })).rejects.toMatchObject({
@@ -269,6 +301,39 @@ describe('network-dynamic broker — resolve + private-IP filter + pin', () => {
       async request() { throw new Error('should not be called'); },
     };
     const m = manifestWithPolicy({ registrableDomain: ['acme.com'] });
+    await expect(call(m, transport, { url: 'https://status.acme.com/', method: 'GET' })).rejects.toMatchObject({
+      structured: { code: 'permission.network.resolve_failed' },
+    });
+  });
+
+  it('rejects an expanded-form private IPv6 resolution (non-canonical resolver output)', async () => {
+    const transport: NetworkTransport = {
+      async resolve() { return ['0:0:0:0:0:0:0:1']; },
+      async request() { throw new Error('should not be called'); },
+    };
+    const m = manifestWithPolicy({ registrableDomain: ['acme.com'] });
+    await expect(call(m, transport, { url: 'https://status.acme.com/', method: 'GET' })).rejects.toMatchObject({
+      structured: { code: 'permission.network.resolved_to_private' },
+    });
+  });
+
+  it('rejects when transport.resolve returns a non-IP string (fail closed)', async () => {
+    const transport: NetworkTransport = {
+      async resolve() { return ['not-an-ip']; },
+      async request() { throw new Error('should not be called'); },
+    };
+    const m = manifestWithPolicy({ registrableDomain: ['acme.com'] });
+    await expect(call(m, transport, { url: 'https://status.acme.com/', method: 'GET' })).rejects.toMatchObject({
+      structured: { code: 'permission.network.resolve_failed' },
+    });
+  });
+
+  it('rejects a non-IP resolver string even when denyPrivate=false', async () => {
+    const transport: NetworkTransport = {
+      async resolve() { return ['not-an-ip']; },
+      async request() { throw new Error('should not be called'); },
+    };
+    const m = manifestWithPolicy({ registrableDomain: ['acme.com'], denyPrivate: false });
     await expect(call(m, transport, { url: 'https://status.acme.com/', method: 'GET' })).rejects.toMatchObject({
       structured: { code: 'permission.network.resolve_failed' },
     });

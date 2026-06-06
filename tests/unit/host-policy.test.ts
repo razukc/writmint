@@ -106,6 +106,11 @@ describe('isPrivateIp', () => {
     ['192.168.0.1',   'rfc1918-192.168/16'],
     ['127.0.0.1',     'loopback-127/8'],
     ['169.254.0.1',   'link-local-169.254/16'],
+    // CGNAT space (RFC 6598) — appears inside some cloud VPCs, incl. the
+    // Alibaba metadata endpoint 100.100.100.200.
+    ['100.64.0.0',       'cgnat-100.64/10'],
+    ['100.100.100.200',  'cgnat-100.64/10'],
+    ['100.127.255.255',  'cgnat-100.64/10'],
   ])('rejects IPv4 %s as %s', (ip, range) => {
     expect(isPrivateIp(ip)).toEqual({ private: true, range });
   });
@@ -116,6 +121,8 @@ describe('isPrivateIp', () => {
     ['172.15.0.1'],
     ['172.32.0.1'],
     ['169.253.0.1'],
+    ['100.63.255.255'],  // just below CGNAT
+    ['100.128.0.0'],     // just above CGNAT
   ])('passes IPv4 %s', (ip) => {
     expect(isPrivateIp(ip)).toEqual({ private: false });
   });
@@ -127,6 +134,55 @@ describe('isPrivateIp', () => {
     ['fe80::1',      'link-local-fe80::/10'],
   ])('rejects IPv6 %s as %s', (ip, range) => {
     expect(isPrivateIp(ip)).toEqual({ private: true, range });
+  });
+
+  // Non-canonical IPv6 forms — transport resolvers may return expanded,
+  // zero-padded, or alternatively-compressed strings. Classification is
+  // parser-based (8 hextets), not string-shape-based, so these must all
+  // land in the same ranges as their canonical spellings.
+  it.each([
+    ['0:0:0:0:0:0:0:1',                        'loopback-::1'],
+    ['0000:0000:0000:0000:0000:0000:0000:0001', 'loopback-::1'],
+    ['::0001',                                  'loopback-::1'],
+    ['0::1',                                    'loopback-::1'],
+    ['0:0:0:0:0:0:0:0',                         'unspecified-::'],
+    ['0::0',                                    'unspecified-::'],
+    ['0:0:0:0:0:ffff:7f00:1',                   'loopback-127/8'],
+    ['::ffff:0a00:0001',                        'rfc1918-10/8'],
+    ['FE80::1',                                 'link-local-fe80::/10'],
+    ['FC00::1',                                 'unique-local-fc00::/7'],
+    ['0:0:0:0:0:FFFF:7F00:1',                   'loopback-127/8'],
+  ])('rejects non-canonical IPv6 %s as %s', (ip, range) => {
+    expect(isPrivateIp(ip)).toEqual({ private: true, range });
+  });
+
+  // Embedded dotted-quad inside expanded v4-mapped forms: the trailing
+  // a.b.c.d parses into the last two hextets, then the v4 logic decides.
+  it.each([
+    ['0:0:0:0:0:ffff:127.0.0.1', 'loopback-127/8'],
+    ['0:0:0:0:0:ffff:10.0.0.1',  'rfc1918-10/8'],
+  ])('rejects expanded v4-mapped %s with embedded dotted quad as %s', (ip, range) => {
+    expect(isPrivateIp(ip)).toEqual({ private: true, range });
+  });
+
+  it('passes an expanded public IPv6 address', () => {
+    expect(isPrivateIp('2606:4700:4700:0:0:0:0:1111')).toEqual({ private: false });
+  });
+
+  // Strings that parse as neither IPv4 nor IPv6 are signalled distinctly so
+  // the broker can fail closed instead of mistaking garbage for "public".
+  it.each([
+    ['not-an-ip'],
+    ['1:2:3'],          // too few groups, no compression
+    ['1::2::3'],        // two compressions
+    ['1:2:3:4:5:6:7:8:9'], // too many groups
+    ['12345::1'],       // hextet too long
+    ['999.1.2.3'],      // out-of-range IPv4 octet
+    ['::ffff:1.2.3'],   // malformed embedded dotted quad
+    ['fe80::1%eth0'],   // zone index — never expected here
+    [''],
+  ])('classifies %s as unparseable', (s) => {
+    expect(isPrivateIp(s)).toEqual({ private: 'unparseable' });
   });
 
   it.each([
