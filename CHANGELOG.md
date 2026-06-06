@@ -14,18 +14,18 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   the hostname once via `NetworkTransport.resolve()`, rejects if any
   resolved IP is in a private/loopback/link-local range, and pins the
   surviving IP into the request so the transport cannot re-resolve
-  into a DNS-rebinding target. Default ports pair per scheme
-  (https→443, http→80) when `port` is unset.
+  into a DNS-rebinding target. `scheme` defaults to https-only when
+  unset; default ports pair per scheme (https→443, http→80) when
+  `port` is unset.
 - New `src/host-policy.ts` module: label-boundary registrable-domain
   matcher, IP-literal classifier, private-range check (incl.
   IPv4-mapped IPv6 and unspecified addresses).
 - New tape event `network.resolve`. Tapes from `network`-only
   manifests are unchanged. Replay divergences surface unchanged
   through the broker (never wrapped as `resolve_failed`).
-- New runtime codes: `permission.network.no_resolver`,
-  `scheme_denied`, `port_denied`, `path_denied`,
-  `host_policy_denied`, `private_ip_literal`, `resolved_to_private`,
-  `resolve_failed`.
+- New runtime codes: `permission.network.{no_resolver, scheme_denied,
+  port_denied, path_denied, host_policy_denied, private_ip_literal,
+  resolved_to_private, resolve_failed}`.
 - New structural codes: `permission.network-dynamic.{host_policy,
   registrable_domain, registrable_domain_value, scheme, scheme_value,
   port, port_value, deny_private, path_prefix, path_prefix_value}`.
@@ -43,7 +43,7 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   (`permission.network.no_resolver` otherwise). `request()` input
   gains optional `resolvedIp`.
 - Fixture `ops.url-health-check` migrated to `network-dynamic`
-  (v0.2.0).
+  (manifest v0.2.0).
 
 ## [0.4.2] — 2026-06-03
 

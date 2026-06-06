@@ -25,7 +25,7 @@ In this session the hook either didn't block (settings.json restart picked up la
 
 Filed as a follow-up task. Recovery sequence is identical to the prior discriminator fix.
 
-## Update — dynamic-host shape adopted (v0.2.0)
+## Update — dynamic-host shape adopted (manifest v0.2.0)
 
 The dynamic-host tension flagged above is closed by the new `type: "network-dynamic"` shape. The manifest now declares `hostPolicy.registrableDomain` rather than a closed `hosts[]` set. The author no longer invents plausible hostnames; the approver sees a policy clause (label-boundary suffix list), and per-call URLs are validated against the policy at the broker, with the resolved IP pinned into the transport request.
 
