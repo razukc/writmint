@@ -1,16 +1,18 @@
 {
   "schemaVersion": 1,
   "id": "ops.url-health-check",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "title": "URL Health Check",
-  "description": "Pings a URL and reports its HTTP status and latency.",
+  "description": "Pings a user-supplied URL and reports its HTTP status and latency.",
   "permissions": [
     {
-      "type": "network",
+      "type": "network-dynamic",
       "id": "net.ping",
-      "hosts": ["status.example.com"],
+      "hostPolicy": {
+        "registrableDomain": ["status.example.com"]
+      },
       "methods": ["GET"],
-      "reason": "Used by `ops.url-health-check.ping` to issue a GET request and measure response latency."
+      "reason": "Used by `ops.url-health-check.ping` to GET a user-supplied URL whose host is under the declared registrable domains."
     },
     {
       "type": "clock",

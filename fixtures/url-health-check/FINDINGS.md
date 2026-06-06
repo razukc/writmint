@@ -24,3 +24,12 @@ The pass also surfaced a Layer 3 harness bug. Telemetry from the dogfood session
 In this session the hook either didn't block (settings.json restart picked up late) or Claude Code silenced the error — but the telemetry shows the script ran. Fix: short-circuit on file extension before parsing. `.md`/`.ts`/`.tsx`/`.js`/`.mjs`/`.cjs`/etc. all pass silently. Only `.json` (and possibly `.jsonc`) should go through the parse path.
 
 Filed as a follow-up task. Recovery sequence is identical to the prior discriminator fix.
+
+## Update — dynamic-host shape adopted (v0.2.0)
+
+The dynamic-host tension flagged above is closed by the new `type: "network-dynamic"` shape. The manifest now declares `hostPolicy.registrableDomain` rather than a closed `hosts[]` set. The author no longer invents plausible hostnames; the approver sees a policy clause (label-boundary suffix list), and per-call URLs are validated against the policy at the broker, with the resolved IP pinned into the transport request.
+
+Before (v0.1.0): `{ "type": "network", "hosts": ["status.example.com"] }`
+After (v0.2.0): `{ "type": "network-dynamic", "hostPolicy": { "registrableDomain": ["status.example.com"] } }`
+
+A wildcard attempt now routes to this shape via the extended `permission.network.host_wildcard` fix-hint, so the redesign is reachable from the rejection alone.
