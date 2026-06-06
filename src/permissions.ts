@@ -10,7 +10,7 @@ import type {
   CapabilityManifest,
 } from './capability-manifest.js';
 import { classifyHost, isPrivateIp, matchesRegistrableDomain } from './host-policy.js';
-import { formatStructuredError, type StructuredError } from './errors.js';
+import { formatStructuredError, isStructuredError, type StructuredError } from './errors.js';
 
 export type { StructuredError };
 
@@ -424,10 +424,11 @@ function buildNetworkDynamicBroker(
         try {
           resolved = await transport.resolve(hostname);
         } catch (e) {
-          // A ReplayDivergenceError from a replay transport is a tape mismatch,
-          // not a DNS failure — re-throw unchanged so the divergence surfaces.
-          // Structural check (by name) avoids a circular import with replay.ts.
-          if (e instanceof Error && e.name === 'ReplayDivergenceError') throw e;
+          // Replay divergences must surface unchanged: wrapping one as resolve_failed
+          // would hand the agent a misleading DNS fixHint for what is actually a tape
+          // mismatch. Keyed off the structured code namespace (stable contract) rather
+          // than the class name; avoids importing from replay.ts (circular).
+          if (isStructuredError(e) && e.structured.code.startsWith('replay.')) throw e;
           throw new PermissionError({
             code: 'permission.network.resolve_failed',
             where: `cap("${id}").request.url`,

@@ -81,6 +81,19 @@ describe('network-dynamic replay', () => {
     });
   });
 
+  it('replays a resolver throw: resolve_failed round-trips', async () => {
+    const throwing = { ...baseTransport, async resolve(): Promise<string[]> { throw new Error('ENOTFOUND'); } };
+    const run = async (t: HostTransports) => {
+      try { await runOnce(t); return 'unexpected-success'; }
+      catch (e) { return (e as { structured: { code: string } }).structured.code; }
+    };
+    const { recording, output } = await record({ network: throwing }, run);
+    expect(output).toBe('permission.network.resolve_failed');
+    expect(recording.entries[0]).toMatchObject({ kind: 'network.resolve', threw: true });
+    const { output: replayed } = await replay(recording, run);
+    expect(replayed).toBe('permission.network.resolve_failed');
+  });
+
   it('emits no audit events for a network-dynamic request (network calls do not auto-audit)', async () => {
     const auditEvents: unknown[] = [];
     const transports: HostTransports = {

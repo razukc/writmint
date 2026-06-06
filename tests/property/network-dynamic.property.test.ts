@@ -10,9 +10,21 @@ import {
 import { record, replay } from '../../src/replay.js';
 import type { CapabilityManifest, NetworkDynamicPermission } from '../../src/capability-manifest.js';
 
+const labelArb = fc.stringMatching(/^[a-z0-9]([a-z0-9-]{0,8}[a-z0-9])?$/);
+const domainArb = fc.constantFrom('acme.com', 'b.com');
+
+// Three shapes: well-formed subdomain hosts, suffix-without-boundary hosts
+// (e.g. 'evilacme.com' must NOT match policy ['acme.com']), and mixed-case
+// variants of either to probe the implementation's case handling.
 const hostArb = fc
-  .tuple(fc.constantFrom('a', 'status', 'health', 'api'), fc.constantFrom('acme.com', 'b.com'))
-  .map(([sub, dom]) => `${sub}.${dom}`);
+  .tuple(
+    fc.oneof(
+      fc.tuple(labelArb, domainArb).map(([sub, dom]) => `${sub}.${dom}`),
+      domainArb.map((dom) => `evil${dom}`),
+    ),
+    fc.boolean(),
+  )
+  .map(([host, upper]) => (upper ? host.toUpperCase() : host));
 
 const policyArb = fc.record({
   registrableDomain: fc.constantFrom<string[]>(['acme.com'], ['b.com'], ['acme.com', 'b.com']),
@@ -53,14 +65,18 @@ const ok: NetworkTransport = {
 };
 
 function suffixMatch(host: string, domains: string[]): boolean {
-  return domains.some((d) => host === d || host.endsWith('.' + d));
+  const h = host.toLowerCase();
+  return domains.some((raw) => {
+    const d = raw.toLowerCase();
+    return h === d || h.endsWith('.' + d);
+  });
 }
 
 describe('network-dynamic — invariants', () => {
   it('passes when host suffix-matches policy AND scheme/port/path/private all pass', async () => {
     await fc.assert(
       fc.asyncProperty(policyArb, hostArb, async (hp, host) => {
-        if (!suffixMatch(host, hp.registrableDomain)) return;
+        fc.pre(suffixMatch(host, hp.registrableDomain));
         const reg = createPermissionRegistry(manifestFor(hp), { network: ok });
         const scope = reg.forAction('ops.dyn.go');
         const cap = scope.cap('net.dyn') as { request: (i: NetworkRequest) => Promise<NetworkResponse> };
@@ -72,7 +88,7 @@ describe('network-dynamic — invariants', () => {
   it('rejects with host_policy_denied when the host fails the suffix check', async () => {
     await fc.assert(
       fc.asyncProperty(policyArb, hostArb, async (hp, host) => {
-        if (suffixMatch(host, hp.registrableDomain)) return;
+        fc.pre(!suffixMatch(host, hp.registrableDomain));
         const reg = createPermissionRegistry(manifestFor(hp), { network: ok });
         const scope = reg.forAction('ops.dyn.go');
         const cap = scope.cap('net.dyn') as { request: (i: NetworkRequest) => Promise<NetworkResponse> };
@@ -91,7 +107,7 @@ describe('network-dynamic — invariants', () => {
   it('replay round-trips: record then replay yields the same output', async () => {
     await fc.assert(
       fc.asyncProperty(policyArb, hostArb, async (hp, host) => {
-        if (!suffixMatch(host, hp.registrableDomain)) return;
+        fc.pre(suffixMatch(host, hp.registrableDomain));
         const run = async (t: HostTransports) => {
           const reg = createPermissionRegistry(manifestFor(hp), t);
           const scope = reg.forAction('ops.dyn.go');
