@@ -34,10 +34,12 @@ const deniedIpArb = fc.constantFrom(
   // pre-existing deny set
   '10.0.0.1', '172.16.0.1', '192.168.0.1', '127.0.0.1', '169.254.0.1', '100.64.0.1',
   '::1', 'fc00::1', 'fe80::1',
-  // completed deny set (v0.5.2)
+  // completed deny set (special-purpose IPv4/IPv6 — deny-range completion)
+  // (TEST-NET entries here are deny subjects, not stand-ins.)
   '192.0.0.1', '192.0.2.1', '192.88.99.1', '198.18.0.1', '198.51.100.1', '203.0.113.1',
   '224.0.0.251', '240.0.0.1',
   'ff02::1', '2001:db8::1', '100::1', '64:ff9b:1::1',
+  '64:ff9b::a00:1', // NAT64 WKP embedding 10.0.0.1
 );
 
 function manifestFor(hp: NetworkDynamicPermission['hostPolicy']): CapabilityManifest {

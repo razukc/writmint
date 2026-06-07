@@ -249,6 +249,8 @@ describe('network-dynamic broker — per-call checks', () => {
   });
 });
 
+// TEST-NET addresses below are the subject under test (now denied), not
+// public stand-ins — those migrated to 93.184.216.x; see commit 82021cc.
 describe('network-dynamic broker — completed deny set', () => {
   it.each([
     ['https://224.0.0.251/', 'multicast-224/4'],
@@ -256,15 +258,12 @@ describe('network-dynamic broker — completed deny set', () => {
     ['https://198.18.0.1/', 'benchmark-198.18/15'],
     ['https://[ff02::1]/', 'multicast-ff00::/8'],
     ['https://[2001:db8::1]/', 'documentation-2001:db8/32'],
+    ['https://[64:ff9b::a00:1]/', 'rfc1918-10/8'],
   ])('rejects IP literal %s as private_ip_literal (%s)', async (url, range) => {
     const m = manifestWithPolicy({ registrableDomain: ['acme.com'] });
-    await call(m, makeTransport(), { url, method: 'GET' }).then(
-      () => { throw new Error('expected rejection'); },
-      (e: PermissionError) => {
-        expect(e.structured.code).toBe('permission.network.private_ip_literal');
-        expect(e.structured.actual).toContain(range);
-      },
-    );
+    await expect(call(m, makeTransport(), { url, method: 'GET' })).rejects.toMatchObject({
+      structured: { code: 'permission.network.private_ip_literal', actual: expect.stringContaining(range) },
+    });
   });
 
   it.each([
@@ -273,16 +272,13 @@ describe('network-dynamic broker — completed deny set', () => {
     ['224.0.0.251', 'multicast-224/4'],
     ['2001:db8::1', 'documentation-2001:db8/32'],
     ['ff02::1', 'multicast-ff00::/8'],
+    ['64:ff9b::a00:1', 'rfc1918-10/8'],
   ])('rejects when hostname resolves to %s as resolved_to_private (%s)', async (ip, range) => {
     const transport = makeTransport({ async resolve() { return [ip]; } });
     const m = manifestWithPolicy({ registrableDomain: ['acme.com'] });
-    await call(m, transport, { url: 'https://status.acme.com/', method: 'GET' }).then(
-      () => { throw new Error('expected rejection'); },
-      (e: PermissionError) => {
-        expect(e.structured.code).toBe('permission.network.resolved_to_private');
-        expect(e.structured.actual).toContain(range);
-      },
-    );
+    await expect(call(m, transport, { url: 'https://status.acme.com/', method: 'GET' })).rejects.toMatchObject({
+      structured: { code: 'permission.network.resolved_to_private', actual: expect.stringContaining(range) },
+    });
   });
 });
 
