@@ -115,12 +115,17 @@ function classifyV4(a: number, b: number, c: number): PrivateIpResult {
   if (a === 169 && b === 254) return { private: true, range: 'link-local-169.254/16' };
   // Special-purpose ranges: never legitimate public destinations. A resolver
   // answer here is a misconfiguration or an SSRF probe — fail closed.
+  // Blanket /24: the globally-reachable carve-outs (192.0.0.9 PCP, .10 TURN)
+  // are intentionally denied — fail closed.
   if (a === 192 && b === 0 && c === 0) return { private: true, range: 'ietf-192.0.0/24' };
   if (a === 192 && b === 0 && c === 2) return { private: true, range: 'test-net-192.0.2/24' };
+  if (a === 192 && b === 88 && c === 99) return { private: true, range: '6to4-relay-192.88.99/24' };
   if (a === 198 && (b === 18 || b === 19)) return { private: true, range: 'benchmark-198.18/15' };
   if (a === 198 && b === 51 && c === 100) return { private: true, range: 'test-net-198.51.100/24' };
   if (a === 203 && b === 0 && c === 113) return { private: true, range: 'test-net-203.0.113/24' };
   if (a >= 224 && a <= 239) return { private: true, range: 'multicast-224/4' };
+  // 255.255.255.255 (limited broadcast) is its own IANA entry but lands here;
+  // same deny outcome, one fewer clause.
   if (a >= 240) return { private: true, range: 'reserved-240/4' };
   return { private: false };
 }

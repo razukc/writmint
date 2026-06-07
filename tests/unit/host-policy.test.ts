@@ -235,6 +235,8 @@ describe('isPrivateIp', () => {
     ['192.0.0.255',     'ietf-192.0.0/24'],
     ['192.0.2.0',       'test-net-192.0.2/24'],  // TEST-NET-1
     ['192.0.2.255',     'test-net-192.0.2/24'],
+    ['192.88.99.0',     '6to4-relay-192.88.99/24'],
+    ['192.88.99.255',   '6to4-relay-192.88.99/24'],
     ['198.18.0.0',      'benchmark-198.18/15'],
     ['198.19.255.255',  'benchmark-198.18/15'],
     ['198.51.100.0',    'test-net-198.51.100/24'], // TEST-NET-2
@@ -254,6 +256,8 @@ describe('isPrivateIp', () => {
   it.each([
     ['192.0.1.0'],      // between 192.0.0/24 and 192.0.2/24
     ['192.0.3.0'],      // just above TEST-NET-1
+    ['192.88.98.255'],  // just below 6to4 relay
+    ['192.88.100.0'],   // just above 6to4 relay
     ['198.17.255.255'], // just below benchmarking
     ['198.20.0.0'],     // just above benchmarking
     ['198.51.99.255'],  // just below TEST-NET-2
@@ -271,5 +275,9 @@ describe('isPrivateIp', () => {
     ['::ffff:e000:fb',     'multicast-224/4'],     // hex form of 224.0.0.251
   ])('rejects IPv4-mapped IPv6 %s (completed deny set) as %s', (ip, range) => {
     expect(isPrivateIp(ip)).toEqual({ private: true, range });
+  });
+
+  it('passes IPv4-mapped IPv6 wrapping a public neighbor (::ffff:192.0.1.5)', () => {
+    expect(isPrivateIp('::ffff:192.0.1.5')).toEqual({ private: false });
   });
 });
