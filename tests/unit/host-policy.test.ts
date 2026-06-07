@@ -227,4 +227,49 @@ describe('isPrivateIp', () => {
     expect(hostname).toBe('127.0.0.1');
     expect(isPrivateIp(hostname)).toEqual({ private: true, range: 'loopback-127/8' });
   });
+
+  // Completed deny set (was documented-deferred in v0.5.x): special-purpose
+  // IPv4 ranges that are never legitimate public destinations.
+  it.each([
+    ['192.0.0.0',       'ietf-192.0.0/24'],      // protocol assignments (incl. DS-Lite)
+    ['192.0.0.255',     'ietf-192.0.0/24'],
+    ['192.0.2.0',       'test-net-192.0.2/24'],  // TEST-NET-1
+    ['192.0.2.255',     'test-net-192.0.2/24'],
+    ['198.18.0.0',      'benchmark-198.18/15'],
+    ['198.19.255.255',  'benchmark-198.18/15'],
+    ['198.51.100.0',    'test-net-198.51.100/24'], // TEST-NET-2
+    ['198.51.100.255',  'test-net-198.51.100/24'],
+    ['203.0.113.0',     'test-net-203.0.113/24'],  // TEST-NET-3
+    ['203.0.113.255',   'test-net-203.0.113/24'],
+    ['224.0.0.0',       'multicast-224/4'],
+    ['224.0.0.251',     'multicast-224/4'],        // mDNS
+    ['239.255.255.255', 'multicast-224/4'],
+    ['240.0.0.0',       'reserved-240/4'],
+    ['255.255.255.255', 'reserved-240/4'],         // broadcast
+  ])('rejects special-purpose IPv4 %s as %s', (ip, range) => {
+    expect(isPrivateIp(ip)).toEqual({ private: true, range });
+  });
+
+  // Public neighbors of each new range stay public.
+  it.each([
+    ['192.0.1.0'],      // between 192.0.0/24 and 192.0.2/24
+    ['192.0.3.0'],      // just above TEST-NET-1
+    ['198.17.255.255'], // just below benchmarking
+    ['198.20.0.0'],     // just above benchmarking
+    ['198.51.99.255'],  // just below TEST-NET-2
+    ['198.51.101.0'],   // just above TEST-NET-2
+    ['203.0.112.255'],  // just below TEST-NET-3
+    ['203.0.114.0'],    // just above TEST-NET-3
+    ['223.255.255.255'],// just below multicast
+  ])('passes boundary-neighbor IPv4 %s', (ip) => {
+    expect(isPrivateIp(ip)).toEqual({ private: false });
+  });
+
+  // IPv4-mapped IPv6 wrapping the new ranges follows the embedded v4.
+  it.each([
+    ['::ffff:203.0.113.7', 'test-net-203.0.113/24'],
+    ['::ffff:e000:fb',     'multicast-224/4'],     // hex form of 224.0.0.251
+  ])('rejects IPv4-mapped IPv6 %s (completed deny set) as %s', (ip, range) => {
+    expect(isPrivateIp(ip)).toEqual({ private: true, range });
+  });
 });

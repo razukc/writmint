@@ -103,7 +103,7 @@ function parseIpv6(raw: string): number[] | null {
 // and `224.0.0.0/4` + `240.0.0.0/4` (multicast/reserved). An `IPNet`-style
 // policy clause is the planned home for tightening these — consistent with
 // the design spec's out-of-scope item on custom range policies.
-function classifyV4(a: number, b: number): PrivateIpResult {
+function classifyV4(a: number, b: number, c: number): PrivateIpResult {
   if (a === 0) return { private: true, range: 'unspecified-0/8' };
   if (a === 10) return { private: true, range: 'rfc1918-10/8' };
   // CGNAT space appears inside some cloud VPCs, incl. the Alibaba metadata
@@ -113,6 +113,15 @@ function classifyV4(a: number, b: number): PrivateIpResult {
   if (a === 192 && b === 168) return { private: true, range: 'rfc1918-192.168/16' };
   if (a === 127) return { private: true, range: 'loopback-127/8' };
   if (a === 169 && b === 254) return { private: true, range: 'link-local-169.254/16' };
+  // Special-purpose ranges: never legitimate public destinations. A resolver
+  // answer here is a misconfiguration or an SSRF probe — fail closed.
+  if (a === 192 && b === 0 && c === 0) return { private: true, range: 'ietf-192.0.0/24' };
+  if (a === 192 && b === 0 && c === 2) return { private: true, range: 'test-net-192.0.2/24' };
+  if (a === 198 && (b === 18 || b === 19)) return { private: true, range: 'benchmark-198.18/15' };
+  if (a === 198 && b === 51 && c === 100) return { private: true, range: 'test-net-198.51.100/24' };
+  if (a === 203 && b === 0 && c === 113) return { private: true, range: 'test-net-203.0.113/24' };
+  if (a >= 224 && a <= 239) return { private: true, range: 'multicast-224/4' };
+  if (a >= 240) return { private: true, range: 'reserved-240/4' };
   return { private: false };
 }
 
@@ -120,11 +129,11 @@ export function isPrivateIp(ip: string): PrivateIpResult {
   // IPv4 dotted-quad
   const v4 = ip.match(IPV4_RE);
   if (v4) {
-    const [a, b] = [Number(v4[1]), Number(v4[2])];
-    if (a > 255 || b > 255 || Number(v4[3]) > 255 || Number(v4[4]) > 255) {
+    const [a, b, c] = [Number(v4[1]), Number(v4[2]), Number(v4[3])];
+    if (a > 255 || b > 255 || c > 255 || Number(v4[4]) > 255) {
       return { private: 'unparseable' };
     }
-    return classifyV4(a, b);
+    return classifyV4(a, b, c);
   }
 
   // IPv6 — all range checks run against the parsed hextet array, never the
@@ -136,7 +145,7 @@ export function isPrivateIp(ip: string): PrivateIpResult {
     if (h[5] === 0 && h[6] === 0 && h[7] === 1) return { private: true, range: 'loopback-::1' };
     // IPv4-mapped IPv6 (::ffff:0:0/96): the embedded v4 address is what
     // matters — classify the last 32 bits and report the v4 range.
-    if (h[5] === 0xffff) return classifyV4(h[6] >> 8, h[6] & 0xff);
+    if (h[5] === 0xffff) return classifyV4(h[6] >> 8, h[6] & 0xff, h[7] >> 8);
   }
   // fc00::/7 covers fc00::/8 and fd00::/8
   if ((h[0] & 0xfe00) === 0xfc00) return { private: true, range: 'unique-local-fc00::/7' };
