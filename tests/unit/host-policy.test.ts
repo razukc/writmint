@@ -280,4 +280,32 @@ describe('isPrivateIp', () => {
   it('passes IPv4-mapped IPv6 wrapping a public neighbor (::ffff:192.0.1.5)', () => {
     expect(isPrivateIp('::ffff:192.0.1.5')).toEqual({ private: false });
   });
+
+  // IPv6 parity for the completed deny set. Spelling-independent: the
+  // classifier works on parsed hextets, so expanded/uppercase forms land in
+  // the same ranges as canonical compressions.
+  it.each([
+    ['ff02::1',                              'multicast-ff00::/8'],   // all-nodes
+    ['ff05::2',                              'multicast-ff00::/8'],
+    ['FF02:0:0:0:0:0:0:1',                   'multicast-ff00::/8'],   // expanded uppercase
+    ['2001:db8::1',                          'documentation-2001:db8/32'],
+    ['2001:0db8:0000:0000:0000:0000:0000:1', 'documentation-2001:db8/32'],
+    ['100::',                                'discard-100::/64'],     // RFC 6666
+    ['100::1',                               'discard-100::/64'],
+    ['0100:0:0:0:0:0:0:1',                   'discard-100::/64'],     // expanded
+    ['64:ff9b:1::1',                         'nat64-local-64:ff9b:1::/48'], // RFC 8215
+  ])('rejects special-purpose IPv6 %s as %s', (ip, range) => {
+    expect(isPrivateIp(ip)).toEqual({ private: true, range });
+  });
+
+  // Public neighbors stay public.
+  it.each([
+    ['fe00::1'],        // just below multicast (and outside fe80::/10)
+    ['2001:db9::1'],    // just above documentation
+    ['2001:db7::1'],    // just below documentation
+    ['100:0:0:1::1'],   // outside 100::/64 (h[3] nonzero)
+    ['101::1'],         // adjacent first hextet
+  ])('passes IPv6 boundary-neighbor %s', (ip) => {
+    expect(isPrivateIp(ip)).toEqual({ private: false });
+  });
 });

@@ -156,5 +156,17 @@ export function isPrivateIp(ip: string): PrivateIpResult {
   if ((h[0] & 0xfe00) === 0xfc00) return { private: true, range: 'unique-local-fc00::/7' };
   // fe80::/10 — first 10 bits are 1111111010
   if ((h[0] & 0xffc0) === 0xfe80) return { private: true, range: 'link-local-fe80::/10' };
+  // ff00::/8 — all IPv6 multicast.
+  if ((h[0] & 0xff00) === 0xff00) return { private: true, range: 'multicast-ff00::/8' };
+  // 2001:db8::/32 — documentation (RFC 3849); v6 analogue of TEST-NET.
+  if (h[0] === 0x2001 && h[1] === 0xdb8) return { private: true, range: 'documentation-2001:db8/32' };
+  // 100::/64 — discard-only (RFC 6666).
+  if (h[0] === 0x100 && h[1] === 0 && h[2] === 0 && h[3] === 0) {
+    return { private: true, range: 'discard-100::/64' };
+  }
+  // 64:ff9b:1::/48 — local-use NAT64 (RFC 8215): locally scoped by definition.
+  if (h[0] === 0x64 && h[1] === 0xff9b && h[2] === 1) {
+    return { private: true, range: 'nat64-local-64:ff9b:1::/48' };
+  }
   return { private: false };
 }
