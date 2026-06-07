@@ -308,4 +308,31 @@ describe('isPrivateIp', () => {
   ])('passes IPv6 boundary-neighbor %s', (ip) => {
     expect(isPrivateIp(ip)).toEqual({ private: false });
   });
+
+  // Tunnel prefixes embedding an IPv4 address: classify the embedded v4 and
+  // report its range. Public tunnel targets stay allowed.
+  it.each([
+    // NAT64 well-known prefix 64:ff9b::/96 — v4 in the last 32 bits.
+    ['64:ff9b::a00:1',     'rfc1918-10/8'],          // wraps 10.0.0.1
+    ['64:ff9b::7f00:1',    'loopback-127/8'],        // wraps 127.0.0.1
+    ['64:ff9b::10.0.0.1',  'rfc1918-10/8'],          // dotted-quad spelling
+    // 6to4 2002::/16 — v4 in hextets 1–2.
+    ['2002:a00:1::',       'rfc1918-10/8'],          // wraps 10.0.0.1
+    ['2002:7f00:1::',      'loopback-127/8'],        // wraps 127.0.0.1
+    ['2002:c0a8:101::',    'rfc1918-192.168/16'],    // wraps 192.168.1.1
+    // Teredo 2001::/32 — client v4 in the last 32 bits, bit-inverted.
+    ['2001::3f57:fefe',    'rfc1918-192.168/16'],    // wraps 192.168.1.1 (inverted)
+    ['2001:0:0:0:0:0:3f57:fefe', 'rfc1918-192.168/16'], // expanded spelling
+  ])('rejects tunnel form %s embedding a private IPv4 as %s', (ip, range) => {
+    expect(isPrivateIp(ip)).toEqual({ private: true, range });
+  });
+
+  it.each([
+    ['64:ff9b::808:808'],  // NAT64 wrapping 8.8.8.8
+    ['64:ff9b::8.8.8.8'],
+    ['2002:808:808::'],    // 6to4 wrapping 8.8.8.8
+    ['2001::f7f7:f7f7'],   // Teredo wrapping 8.8.8.8 (inverted)
+  ])('passes tunnel form %s embedding a public IPv4', (ip) => {
+    expect(isPrivateIp(ip)).toEqual({ private: false });
+  });
 });

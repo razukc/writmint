@@ -168,5 +168,21 @@ export function isPrivateIp(ip: string): PrivateIpResult {
   if (h[0] === 0x64 && h[1] === 0xff9b && h[2] === 1) {
     return { private: true, range: 'nat64-local-64:ff9b:1::/48' };
   }
+  // Tunnel prefixes embedding an IPv4 address: classify the embedded v4,
+  // same as the IPv4-mapped branch above. Public tunnel targets stay allowed.
+  // NAT64 well-known prefix 64:ff9b::/96 (RFC 6052) — v4 in the last 32 bits.
+  if (h[0] === 0x64 && h[1] === 0xff9b && h[2] === 0 && h[3] === 0 && h[4] === 0 && h[5] === 0) {
+    return classifyV4(h[6] >> 8, h[6] & 0xff, h[7] >> 8);
+  }
+  // 6to4 2002::/16 (RFC 3056) — v4 in hextets 1–2.
+  if (h[0] === 0x2002) {
+    return classifyV4(h[1] >> 8, h[1] & 0xff, h[2] >> 8);
+  }
+  // Teredo 2001::/32 (RFC 4380) — client v4 in the last 32 bits, bit-inverted.
+  if (h[0] === 0x2001 && h[1] === 0) {
+    const v6 = h[6] ^ 0xffff;
+    const v7 = h[7] ^ 0xffff;
+    return classifyV4(v6 >> 8, v6 & 0xff, v7 >> 8);
+  }
   return { private: false };
 }
