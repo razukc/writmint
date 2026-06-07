@@ -77,8 +77,8 @@ The structured-error contract effectively teaches the schema. Without ever readi
 
 This is now the **sixth** v0.3 candidate from the dogfood corpus — building on the five in `fixtures/DOGFOOD-SUMMARY.md`.
 
-## Open: rerun pass 05 against the updated `host_wildcard` fix-hint
+## Closed: rerun landed as pass 05b (2026-06-07) — see `fixtures/url-health-check-no-skill-rerun/`
 
 The 4-round-trip / 16-code recovery loop documented above hit a wall at `permission.network.host_wildcard`: the fix-hint named the rule but couldn't steer the agent toward a usable shape when the URL is user-supplied at call time — the agent invented hostnames.
 
-After the dynamic-host feature, the `host_wildcard` fix-hint routes to `type:network-dynamic` with `hostPolicy.registrableDomain`. Rerun expectation: the agent encounters `host_wildcard`, the hint routes to the new shape, the second author pass lands a policy that passes hardening. Target ceiling for the host-policy segment (from the first `host_wildcard` rejection to acceptance): **≤2 round-trips, ≤4 codes** — vs the original segment's policy dead-end that forced invented hostnames. Whole-pass numbers will still include the schema-discovery rounds (1–3 above), which this feature does not touch. Capture actual segment and whole-pass numbers in a new section here when the rerun lands.
+After the dynamic-host feature, the rerun (same conditions, skill disabled, live gate) measured: **whole-pass 4 round-trips / 12 codes; host-policy segment 2 round-trips / 2 codes** — segment target (≤2/≤4) met, and **zero invented hostnames**. Notable: routing happened via the `permission.type` enum (`expected: one of network, network-dynamic, …`) in round 2, one layer earlier than the `host_wildcard` tail clause this feature was designed around — the agent never declared `hosts` at all. The wildcard instinct resurfaced as `registrableDomain: ["*"]` and was held by `registrable_domain_invalid`. Full analysis and the complete attempt-by-attempt record (every write + every rejection payload, per harness open item #3) in `fixtures/url-health-check-no-skill-rerun/FINDINGS.md` and `ATTEMPTS.md`.
