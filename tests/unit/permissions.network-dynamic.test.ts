@@ -249,6 +249,43 @@ describe('network-dynamic broker — per-call checks', () => {
   });
 });
 
+describe('network-dynamic broker — completed deny set', () => {
+  it.each([
+    ['https://224.0.0.251/', 'multicast-224/4'],
+    ['https://203.0.113.7/', 'test-net-203.0.113/24'],
+    ['https://198.18.0.1/', 'benchmark-198.18/15'],
+    ['https://[ff02::1]/', 'multicast-ff00::/8'],
+    ['https://[2001:db8::1]/', 'documentation-2001:db8/32'],
+  ])('rejects IP literal %s as private_ip_literal (%s)', async (url, range) => {
+    const m = manifestWithPolicy({ registrableDomain: ['acme.com'] });
+    await call(m, makeTransport(), { url, method: 'GET' }).then(
+      () => { throw new Error('expected rejection'); },
+      (e: PermissionError) => {
+        expect(e.structured.code).toBe('permission.network.private_ip_literal');
+        expect(e.structured.actual).toContain(range);
+      },
+    );
+  });
+
+  it.each([
+    ['198.18.0.1', 'benchmark-198.18/15'],
+    ['203.0.113.7', 'test-net-203.0.113/24'],
+    ['224.0.0.251', 'multicast-224/4'],
+    ['2001:db8::1', 'documentation-2001:db8/32'],
+    ['ff02::1', 'multicast-ff00::/8'],
+  ])('rejects when hostname resolves to %s as resolved_to_private (%s)', async (ip, range) => {
+    const transport = makeTransport({ async resolve() { return [ip]; } });
+    const m = manifestWithPolicy({ registrableDomain: ['acme.com'] });
+    await call(m, transport, { url: 'https://status.acme.com/', method: 'GET' }).then(
+      () => { throw new Error('expected rejection'); },
+      (e: PermissionError) => {
+        expect(e.structured.code).toBe('permission.network.resolved_to_private');
+        expect(e.structured.actual).toContain(range);
+      },
+    );
+  });
+});
+
 describe('network-dynamic broker — resolve + private-IP filter + pin', () => {
   it('resolves the hostname and passes resolvedIp to transport.request', async () => {
     const seen: Array<NetworkRequest & { resolvedIp?: string }> = [];

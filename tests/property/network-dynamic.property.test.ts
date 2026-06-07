@@ -30,6 +30,16 @@ const policyArb = fc.record({
   registrableDomain: fc.constantFrom<string[]>(['acme.com'], ['b.com'], ['acme.com', 'b.com']),
 });
 
+const deniedIpArb = fc.constantFrom(
+  // pre-existing deny set
+  '10.0.0.1', '172.16.0.1', '192.168.0.1', '127.0.0.1', '169.254.0.1', '100.64.0.1',
+  '::1', 'fc00::1', 'fe80::1',
+  // completed deny set (v0.5.2)
+  '192.0.0.1', '192.0.2.1', '192.88.99.1', '198.18.0.1', '198.51.100.1', '203.0.113.1',
+  '224.0.0.251', '240.0.0.1',
+  'ff02::1', '2001:db8::1', '100::1', '64:ff9b:1::1',
+);
+
 function manifestFor(hp: NetworkDynamicPermission['hostPolicy']): CapabilityManifest {
   return {
     schemaVersion: 1,
@@ -97,6 +107,29 @@ describe('network-dynamic — invariants', () => {
           (e: { structured?: { code?: string } }) => {
             if (e.structured?.code !== 'permission.network.host_policy_denied') {
               throw new Error(`expected host_policy_denied, got ${e.structured?.code}`);
+            }
+          },
+        );
+      }),
+    );
+  });
+
+  it('rejects resolved_to_private for every address in the deny set', async () => {
+    await fc.assert(
+      fc.asyncProperty(policyArb, hostArb, deniedIpArb, async (hp, host, ip) => {
+        fc.pre(suffixMatch(host, hp.registrableDomain));
+        const t: NetworkTransport = {
+          async resolve() { return [ip]; },
+          async request() { throw new Error('must not be called'); },
+        };
+        const reg = createPermissionRegistry(manifestFor(hp), { network: t });
+        const scope = reg.forAction('ops.dyn.go');
+        const cap = scope.cap('net.dyn') as { request: (i: NetworkRequest) => Promise<NetworkResponse> };
+        await cap.request({ url: `https://${host}/`, method: 'GET' }).then(
+          () => { throw new Error('expected rejection'); },
+          (e: { structured?: { code?: string } }) => {
+            if (e.structured?.code !== 'permission.network.resolved_to_private') {
+              throw new Error(`expected resolved_to_private for ${ip}, got ${e.structured?.code}`);
             }
           },
         );
