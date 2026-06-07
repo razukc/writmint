@@ -297,8 +297,8 @@ describe('isPrivateIp', () => {
     ['ff02::1',                              'multicast-ff00::/8'],   // all-nodes
     ['ff05::2',                              'multicast-ff00::/8'],
     ['FF02:0:0:0:0:0:0:1',                   'multicast-ff00::/8'],   // expanded uppercase
-    ['2001:db8::1',                          'documentation-2001:db8/32'],
-    ['2001:0db8:0000:0000:0000:0000:0000:1', 'documentation-2001:db8/32'],
+    ['2001:db8::1',                          'documentation-2001:db8::/32'],
+    ['2001:0db8:0000:0000:0000:0000:0000:1', 'documentation-2001:db8::/32'],
     ['100::',                                'discard-100::/64'],     // RFC 6666
     ['100::1',                               'discard-100::/64'],
     ['0100:0:0:0:0:0:0:1',                   'discard-100::/64'],     // expanded

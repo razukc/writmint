@@ -257,7 +257,7 @@ describe('network-dynamic broker — completed deny set', () => {
     ['https://203.0.113.7/', 'test-net-203.0.113/24'],
     ['https://198.18.0.1/', 'benchmark-198.18/15'],
     ['https://[ff02::1]/', 'multicast-ff00::/8'],
-    ['https://[2001:db8::1]/', 'documentation-2001:db8/32'],
+    ['https://[2001:db8::1]/', 'documentation-2001:db8::/32'],
     ['https://[64:ff9b::a00:1]/', 'rfc1918-10/8'],
   ])('rejects IP literal %s as private_ip_literal (%s)', async (url, range) => {
     const m = manifestWithPolicy({ registrableDomain: ['acme.com'] });
@@ -270,7 +270,7 @@ describe('network-dynamic broker — completed deny set', () => {
     ['198.18.0.1', 'benchmark-198.18/15'],
     ['203.0.113.7', 'test-net-203.0.113/24'],
     ['224.0.0.251', 'multicast-224/4'],
-    ['2001:db8::1', 'documentation-2001:db8/32'],
+    ['2001:db8::1', 'documentation-2001:db8::/32'],
     ['ff02::1', 'multicast-ff00::/8'],
     ['64:ff9b::a00:1', 'rfc1918-10/8'],
   ])('rejects when hostname resolves to %s as resolved_to_private (%s)', async (ip, range) => {

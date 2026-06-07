@@ -159,7 +159,7 @@ export function isPrivateIp(ip: string): PrivateIpResult {
   // ff00::/8 — all IPv6 multicast.
   if ((h[0] & 0xff00) === 0xff00) return { private: true, range: 'multicast-ff00::/8' };
   // 2001:db8::/32 — documentation (RFC 3849); v6 analogue of TEST-NET.
-  if (h[0] === 0x2001 && h[1] === 0xdb8) return { private: true, range: 'documentation-2001:db8/32' };
+  if (h[0] === 0x2001 && h[1] === 0xdb8) return { private: true, range: 'documentation-2001:db8::/32' };
   // 100::/64 — discard-only (RFC 6666).
   if (h[0] === 0x100 && h[1] === 0 && h[2] === 0 && h[3] === 0) {
     return { private: true, range: 'discard-100::/64' };
