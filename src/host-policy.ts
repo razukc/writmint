@@ -100,8 +100,8 @@ function parseIpv6(raw: string): number[] | null {
 
 // Documented-not-denied (deliberate, not oversights): ORCHIDv2 2001:20::/28
 // (overlay identifiers, not routable targets in practice), deprecated
-// site-local fec0::/10, and deprecated IPv4-compatible ::x.x.x.x (lands
-// unparseable-or-public via the generic v6 path). An `IPNet`-style policy
+// site-local fec0::/10, and deprecated IPv4-compatible ::x.x.x.x (parses via
+// the generic v6 path and classifies public). An `IPNet`-style policy
 // clause remains the planned home for *allowing* back into denied space.
 function classifyV4(a: number, b: number, c: number): PrivateIpResult {
   if (a === 0) return { private: true, range: 'unspecified-0/8' };
