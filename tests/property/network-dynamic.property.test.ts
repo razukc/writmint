@@ -60,7 +60,7 @@ function manifestFor(hp: NetworkDynamicPermission['hostPolicy']): CapabilityMani
 }
 
 const ok: NetworkTransport = {
-  async resolve() { return ['203.0.113.1']; },
+  async resolve() { return ['93.184.216.34']; },
   async request() { return { status: 200, headers: {}, body: null }; },
 };
 

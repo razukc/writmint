@@ -39,9 +39,9 @@ function dynManifest(): CapabilityManifest {
 
 const baseTransport = {
   async resolve(host: string): Promise<string[]> {
-    if (host === 'status.acme.com') return ['203.0.113.1'];
-    if (host === 'health.acme.com') return ['203.0.113.2'];
-    return ['203.0.113.99'];
+    if (host === 'status.acme.com') return ['93.184.216.34'];
+    if (host === 'health.acme.com') return ['93.184.216.35'];
+    return ['93.184.216.99'];
   },
   async request(input: NetworkRequest & { resolvedIp?: string }): Promise<NetworkResponse> {
     return { status: 200, headers: {}, body: { url: input.url, ip: input.resolvedIp ?? null } };
@@ -61,7 +61,7 @@ describe('network-dynamic replay', () => {
     expect(output.status).toBe(200);
     expect(recording.entries.map((e) => e.kind)).toEqual(['network.resolve', 'network.request']);
     expect(recording.entries[0].input).toEqual({ hostname: 'status.acme.com' });
-    expect(recording.entries[0].output).toEqual(['203.0.113.1']);
+    expect(recording.entries[0].output).toEqual(['93.184.216.34']);
   });
 
   it('replays a recording deterministically', async () => {

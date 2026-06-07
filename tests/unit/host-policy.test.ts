@@ -85,7 +85,7 @@ describe('classifyHost', () => {
   });
 
   it('returns ipv6 for a bracketed full v6 literal', () => {
-    expect(classifyHost('[2001:db8::1]')).toEqual<HostKind>({ kind: 'ipv6', ip: '2001:db8::1' });
+    expect(classifyHost('[2606:4700:4700::1001]')).toEqual<HostKind>({ kind: 'ipv6', ip: '2606:4700:4700::1001' });
   });
 
   it('returns hostname for a domain name', () => {
@@ -117,7 +117,7 @@ describe('isPrivateIp', () => {
 
   it.each([
     ['8.8.8.8'],
-    ['203.0.113.1'],
+    ['93.184.216.34'],
     ['172.15.0.1'],
     ['172.32.0.1'],
     ['169.253.0.1'],
@@ -186,7 +186,7 @@ describe('isPrivateIp', () => {
   });
 
   it.each([
-    ['2001:db8::1'],
+    ['2606:4700:4700::1001'],
     ['2606:4700:4700::1111'],
   ])('passes IPv6 %s', (ip) => {
     expect(isPrivateIp(ip)).toEqual({ private: false });

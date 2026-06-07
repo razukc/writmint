@@ -91,7 +91,7 @@ describe('createPermissionRegistry — network-dynamic transport contract', () =
 function makeTransport(overrides: Partial<NetworkTransport> = {}): NetworkTransport {
   return {
     async request(): Promise<NetworkResponse> { return { status: 200, headers: {}, body: null }; },
-    async resolve(): Promise<string[]> { return ['203.0.113.1']; },
+    async resolve(): Promise<string[]> { return ['93.184.216.34']; },
     ...overrides,
   };
 }
@@ -253,13 +253,13 @@ describe('network-dynamic broker — resolve + private-IP filter + pin', () => {
   it('resolves the hostname and passes resolvedIp to transport.request', async () => {
     const seen: Array<NetworkRequest & { resolvedIp?: string }> = [];
     const transport: NetworkTransport = {
-      async resolve() { return ['203.0.113.1']; },
+      async resolve() { return ['93.184.216.34']; },
       async request(input) { seen.push(input); return { status: 200, headers: {}, body: null }; },
     };
     const m = manifestWithPolicy({ registrableDomain: ['acme.com'] });
     await call(m, transport, { url: 'https://status.acme.com/', method: 'GET' });
     expect(seen).toHaveLength(1);
-    expect(seen[0].resolvedIp).toBe('203.0.113.1');
+    expect(seen[0].resolvedIp).toBe('93.184.216.34');
   });
 
   it('rejects when hostname resolves to a private IP (denyPrivate default true)', async () => {
@@ -275,7 +275,7 @@ describe('network-dynamic broker — resolve + private-IP filter + pin', () => {
 
   it('rejects when any resolved IP is private (conservative)', async () => {
     const transport: NetworkTransport = {
-      async resolve() { return ['203.0.113.1', '10.0.0.1']; },
+      async resolve() { return ['93.184.216.34', '10.0.0.1']; },
       async request() { throw new Error('should not be called'); },
     };
     const m = manifestWithPolicy({ registrableDomain: ['acme.com'] });
@@ -353,7 +353,7 @@ describe('network-dynamic broker — resolve + private-IP filter + pin', () => {
   it('memoizes the resolve within a single action scope', async () => {
     let resolveCalls = 0;
     const transport: NetworkTransport = {
-      async resolve() { resolveCalls++; return ['203.0.113.1']; },
+      async resolve() { resolveCalls++; return ['93.184.216.34']; },
       async request() { return { status: 200, headers: {}, body: null }; },
     };
     const m = manifestWithPolicy({ registrableDomain: ['acme.com'] });
@@ -368,7 +368,7 @@ describe('network-dynamic broker — resolve + private-IP filter + pin', () => {
   it('does not memoize across action scopes', async () => {
     let resolveCalls = 0;
     const transport: NetworkTransport = {
-      async resolve() { resolveCalls++; return ['203.0.113.1']; },
+      async resolve() { resolveCalls++; return ['93.184.216.34']; },
       async request() { return { status: 200, headers: {}, body: null }; },
     };
     const m = manifestWithPolicy({ registrableDomain: ['acme.com'] });

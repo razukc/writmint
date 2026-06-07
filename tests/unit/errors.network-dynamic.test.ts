@@ -45,7 +45,7 @@ function dynManifest(hp?: NetworkDynamicPermission['hostPolicy']): CapabilityMan
 function makeTransport(overrides: Partial<NetworkTransport> = {}): NetworkTransport {
   return {
     async request(): Promise<NetworkResponse> { return { status: 200, headers: {}, body: null }; },
-    async resolve(): Promise<string[]> { return ['203.0.113.1']; },
+    async resolve(): Promise<string[]> { return ['93.184.216.34']; },
     ...overrides,
   };
 }
