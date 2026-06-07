@@ -98,11 +98,11 @@ function parseIpv6(raw: string): number[] | null {
   return [...head, ...Array<number>(missing).fill(0), ...tail];
 }
 
-// Deliberately excluded from the v1 deny set (deferred, not oversights):
-// `192.0.0.0/24` (IETF protocol assignments), `198.18.0.0/15` (benchmarking),
-// and `224.0.0.0/4` + `240.0.0.0/4` (multicast/reserved). An `IPNet`-style
-// policy clause is the planned home for tightening these — consistent with
-// the design spec's out-of-scope item on custom range policies.
+// Documented-not-denied (deliberate, not oversights): ORCHIDv2 2001:20::/28
+// (overlay identifiers, not routable targets in practice), deprecated
+// site-local fec0::/10, and deprecated IPv4-compatible ::x.x.x.x (lands
+// unparseable-or-public via the generic v6 path). An `IPNet`-style policy
+// clause remains the planned home for *allowing* back into denied space.
 function classifyV4(a: number, b: number, c: number): PrivateIpResult {
   if (a === 0) return { private: true, range: 'unspecified-0/8' };
   if (a === 10) return { private: true, range: 'rfc1918-10/8' };

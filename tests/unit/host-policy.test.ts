@@ -208,6 +208,15 @@ describe('isPrivateIp', () => {
     expect(isPrivateIp(ip)).toEqual({ private: false });
   });
 
+  // Deprecated IPv4-compatible form (::x.x.x.x): documented-not-denied. The
+  // embedded dotted quad parses into the last two hextets via the generic
+  // path; an address like ::10.0.0.1 is NOT in any denied v6 range (it is
+  // not v4-mapped — no ffff hextet) and classifies public. Pinned so a
+  // future tightening is a deliberate decision, not an accident.
+  it('classifies deprecated IPv4-compatible ::10.0.0.1 as public (documented-not-denied)', () => {
+    expect(isPrivateIp('::10.0.0.1')).toEqual({ private: false });
+  });
+
   // Unspecified addresses bind/connect to localhost on Linux/macOS.
   it.each([
     ['0.0.0.0', 'unspecified-0/8'],

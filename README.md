@@ -131,7 +131,7 @@ Network access comes in two shapes. `type: "network"` enumerates exact `hosts` a
 }
 ```
 
-With `denyPrivate` on (the default), the broker resolves each hostname once per action call, rejects private/loopback/link-local/CGNAT answers, and pins the resolved IP into the request as a DNS-rebinding defense. Wildcards are banned in both shapes.
+With `denyPrivate` on (the default), the broker resolves each hostname once per action call, rejects answers in private, loopback, link-local, CGNAT, and other non-routable special-purpose ranges (multicast, TEST-NET, benchmarking, discard), and pins the resolved IP into the request as a DNS-rebinding defense. Wildcards are banned in both shapes.
 
 `hardenManifest()` runs after structural validation. It enforces strictness checks that an approver would otherwise have to enforce by eye:
 

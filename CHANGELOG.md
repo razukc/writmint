@@ -4,6 +4,30 @@ All notable changes to Writmint will land here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+
+- **Completed the `denyPrivate` deny set** (was documented-deferred in
+  v0.5.0): IPv4 — `192.0.0.0/24` (IETF protocol assignments, incl.
+  DS-Lite; the globally-reachable PCP/TURN carve-outs are intentionally
+  denied), TEST-NET-1/2/3 (`192.0.2.0/24`, `198.51.100.0/24`,
+  `203.0.113.0/24`), `192.88.99.0/24` (deprecated 6to4 relay anycast),
+  `198.18.0.0/15` (benchmarking), `224.0.0.0/4` (multicast),
+  `240.0.0.0/4` (reserved, incl. broadcast). IPv6 — `ff00::/8`
+  (multicast), `2001:db8::/32` (documentation), `100::/64`
+  (discard-only), `64:ff9b:1::/48` (local-use NAT64). Tunnel forms that
+  embed an IPv4 address — NAT64 well-known prefix `64:ff9b::/96`, 6to4
+  `2002::/16`, Teredo `2001::/32` (bit-inverted client address) — now
+  classify the embedded IPv4: private-embedded is denied reporting the
+  v4 range, public-embedded stays allowed. No new error codes — new
+  `range` tags ride inside the existing `private_ip_literal` /
+  `resolved_to_private` payloads. **Behavioral tightening:** a manifest
+  whose transport resolves to any of these ranges now fails where it
+  previously passed (notably TEST-NET addresses used as stand-ins).
+  Opting back into denied space remains a deferred `IPNet`-clause
+  feature.
+
 ## [0.5.1] — 2026-06-07
 
 A docs-and-tooling patch. No library code changes — published so the
