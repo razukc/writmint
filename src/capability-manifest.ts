@@ -717,7 +717,12 @@ function validatePermission(
         where: `${where}.hostPolicy`,
         expected: 'object',
         actual: typeOf(p.hostPolicy),
-        fixHint: 'Add a hostPolicy object with at least { registrableDomain: ["example.com"] }.',
+        // "<your-domain>" over a real-looking example: dogfood pass 05b showed
+        // agents paste the hint's example verbatim, and a valid domain sails
+        // through hardening. The marker fails registrable_domain_invalid if
+        // pasted, forcing an actual policy decision.
+        fixHint:
+          'Add a hostPolicy object with at least { registrableDomain: ["<your-domain>"] } — the registrable domains this feature is allowed to reach.',
       });
     } else {
       const hp = p.hostPolicy as Record<string, unknown>;
@@ -729,7 +734,8 @@ function validatePermission(
           where: `${hpWhere}.registrableDomain`,
           expected: 'non-empty string array',
           actual: typeOf(hp.registrableDomain),
-          fixHint: 'Declare at least one registrable domain (e.g. ["acme.com"]).',
+          fixHint:
+            'Declare at least one registrable domain, e.g. ["<your-domain>"] — the domains this feature is allowed to reach.',
         });
       } else {
         hp.registrableDomain.forEach((d, i) => {

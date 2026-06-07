@@ -44,6 +44,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 - `permission.network.host_wildcard` fix-hint now routes authors with
   call-time URLs to `type:network-dynamic`.
+- `permission.network-dynamic.{host_policy, registrable_domain}`
+  fix-hints illustrate with the `"<your-domain>"` fill-in marker
+  instead of a real-looking domain. Dogfood pass 05b showed agents
+  paste the hint's example verbatim — a valid domain sails through
+  hardening, while the marker fails `registrable_domain_invalid` and
+  forces an actual policy decision.
 - `NetworkTransport` gains optional `resolve?(hostname):
   Promise<string[]>`; required at construction time when any
   `network-dynamic` permission is declared

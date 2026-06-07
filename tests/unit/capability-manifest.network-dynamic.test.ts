@@ -52,6 +52,12 @@ describe('validateCapabilityManifest — network-dynamic structural', () => {
     const e = r.errors.find((x) => x.code === 'permission.network-dynamic.host_policy');
     expect(e).toBeDefined();
     expect(e!.where).toBe('$.permissions[0].hostPolicy');
+    // The fixHint's example must be a fill-in marker, not a valid domain:
+    // dogfood pass 05b showed agents copy-paste the hint's example verbatim,
+    // and "example.com" was accepted. "<your-domain>" fails hardening if
+    // pasted, forcing a real policy decision.
+    expect(e!.fixHint).toContain('<your-domain>');
+    expect(e!.fixHint).not.toContain('example.com');
   });
 
   it('rejects a non-array registrableDomain', () => {
@@ -65,6 +71,8 @@ describe('validateCapabilityManifest — network-dynamic structural', () => {
     const e = r.errors.find((x) => x.code === 'permission.network-dynamic.registrable_domain');
     expect(e).toBeDefined();
     expect(e!.where).toBe('$.permissions[0].hostPolicy.registrableDomain');
+    // Same un-copy-pasteable rule as host_policy (see above).
+    expect(e!.fixHint).toContain('<your-domain>');
   });
 
   it('rejects an unsupported scheme value', () => {
