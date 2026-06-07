@@ -4,7 +4,7 @@
 
 You let an AI agent write a capability. Writmint refuses to let the capability do anything its manifest doesn't account for — and tells the agent exactly what to fix when it tries.
 
-> Status: **v0.4.x — early.** API surface is stable enough for the demo below, not yet stable enough to depend on. Issues and feedback welcome.
+> Status: **v0.5.x — early.** API surface is stable enough for the demo below, not yet stable enough to depend on. Issues and feedback welcome.
 
 ---
 
@@ -46,7 +46,9 @@ lifecycle.submit(manifest);
 //   where: '$.permissions[0].hosts[0]',
 //   expected: 'exact hostname (no wildcards)',
 //   actual: '"*.internal"',
-//   fixHint: 'List each allowed hostname explicitly; wildcards make the call surface impossible to audit.',
+//   fixHint: "List each allowed hostname explicitly; wildcards make the call surface impossible
+//             to audit. If the URL is supplied at call time (the host isn't known at author
+//             time), use type:network-dynamic with hostPolicy.registrableDomain instead.",
 // }
 ```
 
@@ -104,13 +106,32 @@ That is the entire loop: **declare → submit (hardened) → approve (hashed) �
 
 ## The five pillars
 
-Each pillar is one file in `src/`.
+Each pillar is one file in `src/` (pillar 2 gained a second, `host-policy.ts`, in v0.5.0).
 
 ### 1. Capability manifest — the declarative contract
 
 A `CapabilityManifest` names the capability, lists every permission it needs (network hosts, dynamic host policies, storage scopes, ui, clock, audit), and declares its actions. The runtime only executes what the manifest declares.
 
-Network access comes in two shapes. `type: "network"` enumerates exact `hosts` at author time — right when the capability talks to a fixed set of services. `type: "network-dynamic"` is for actions that take a **user-supplied URL at call time**: instead of hosts, it declares a `hostPolicy` — a registrable-domain allowlist (label-boundary suffix match, so `acme.com` covers `status.acme.com` but never `evilacme.com`) plus optional scheme/port/path narrowing and a default-on `denyPrivate` that resolves each hostname once, rejects private/loopback/link-local/CGNAT answers, and pins the resolved IP into the request as a DNS-rebinding defense. Wildcards are banned in both shapes.
+Network access comes in two shapes. `type: "network"` enumerates exact `hosts` at author time — right when the capability talks to a fixed set of services. `type: "network-dynamic"` is for actions that take a **user-supplied URL at call time**: instead of hosts, it declares a `hostPolicy`:
+
+```jsonc
+{
+  "type": "network-dynamic",
+  "id": "net.ping",
+  "hostPolicy": {
+    "registrableDomain": ["acme.com"],  // required — label-boundary suffix match:
+                                        // covers status.acme.com, never evilacme.com
+    "scheme": ["https"],                // optional — defaults to https-only
+    "port": [443],                      // optional — defaults pair per scheme
+    "denyPrivate": true,                // optional — default true
+    "pathPrefix": ["/status/"]          // optional — omit for any path
+  },
+  "methods": ["GET"],
+  "reason": "Used by ops.url-health-check.ping to GET a user-supplied URL under the declared domains."
+}
+```
+
+With `denyPrivate` on (the default), the broker resolves each hostname once per action call, rejects private/loopback/link-local/CGNAT answers, and pins the resolved IP into the request as a DNS-rebinding defense. Wildcards are banned in both shapes.
 
 `hardenManifest()` runs after structural validation. It enforces strictness checks that an approver would otherwise have to enforce by eye:
 
@@ -127,7 +148,9 @@ A capability cannot make a network call, write to storage, render UI, read the c
 
 This is the line: **the manifest is the only surface area the capability has on the host system.**
 
-Source: [`src/permissions.ts`](./src/permissions.ts).
+Handlers are oblivious to which network shape backs a permission — `net.request({url, method})` looks identical either way. For `network-dynamic`, the broker additionally requires the host's `NetworkTransport` to provide `resolve(hostname)` (enforced at construction time: `permission.network.no_resolver`), and places two conformance requirements on it: connect to exactly the `resolvedIp` the broker pinned (no re-resolving), and never auto-follow redirects — each 3xx hop must re-enter the broker to be policy-checked.
+
+Source: [`src/permissions.ts`](./src/permissions.ts), with the host-policy checks (domain matcher, IP classifier, private-range table) in [`src/host-policy.ts`](./src/host-policy.ts).
 
 ### 3. Structured errors — every failure has a fix-hint
 
@@ -322,6 +345,7 @@ The `writmint-authoring` Claude Code skill (`~/.claude/skills/writmint-authoring
 src/
   capability-manifest.ts       Pillar 1 — declarative contract + hardenManifest()
   permissions.ts               Pillar 2 — broker boundary, scoped enforcement
+  host-policy.ts               Pillar 2 — hostPolicy checks for network-dynamic (SSRF defense)
   errors.ts                    Pillar 3 — structured errors with fix-hints
   replay.ts                    Pillar 4 — record/replay over the transport seam
   approval.ts                  Pillar 5 — hash-bound approval lifecycle + audit
