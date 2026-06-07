@@ -4,6 +4,32 @@ All notable changes to Writmint will land here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.1] — 2026-06-07
+
+A docs-and-tooling patch. No library code changes — published so the
+npm package's README carries the full `network-dynamic` documentation
+rather than the v0.5.0 release-day summary.
+
+### Changed
+
+- README documents `network-dynamic` in depth: a complete `hostPolicy`
+  example with per-clause defaults (https-only scheme, per-scheme
+  ports, default-on `denyPrivate`), the transport conformance contract
+  (`resolvedIp` pin, no auto-follow on redirects), the
+  construction-time `permission.network.no_resolver` check, and
+  `src/host-policy.ts` in the repository layout. Beat 2's quoted
+  `host_wildcard` rejection now shows the current fix-hint, including
+  the tail clause routing call-time-URL authors to
+  `type:network-dynamic`.
+
+### Fixed
+
+- Dogfood PreToolUse hook (repo tooling, not in the npm tarball): only
+  files named like manifests (`*manifest.json`/`.jsonc`) are checked
+  for manifest shape. Previously any JSON file carrying a `permissions`
+  key — e.g. `.claude/settings.local.json` — was denied as a broken
+  manifest.
+
 ## [0.5.0] — 2026-06-07
 
 A minor release closing the dynamic-host tension from the dogfood
