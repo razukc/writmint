@@ -4,7 +4,12 @@ All notable changes to Writmint will land here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.5.2] — 2026-06-07
+
+A hardening patch completing the `denyPrivate` deny set. No new error
+codes, no manifest schema change — new `range` tags ride inside the
+existing error payloads, and hashes, tapes, and the approval lifecycle
+are untouched.
 
 ### Changed
 
