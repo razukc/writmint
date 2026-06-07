@@ -108,11 +108,13 @@ Each pillar is one file in `src/`.
 
 ### 1. Capability manifest — the declarative contract
 
-A `CapabilityManifest` names the capability, lists every permission it needs (network hosts, storage scopes, ui, clock, audit), and declares its actions. The runtime only executes what the manifest declares.
+A `CapabilityManifest` names the capability, lists every permission it needs (network hosts, dynamic host policies, storage scopes, ui, clock, audit), and declares its actions. The runtime only executes what the manifest declares.
+
+Network access comes in two shapes. `type: "network"` enumerates exact `hosts` at author time — right when the capability talks to a fixed set of services. `type: "network-dynamic"` is for actions that take a **user-supplied URL at call time**: instead of hosts, it declares a `hostPolicy` — a registrable-domain allowlist (label-boundary suffix match, so `acme.com` covers `status.acme.com` but never `evilacme.com`) plus optional scheme/port/path narrowing and a default-on `denyPrivate` that resolves each hostname once, rejects private/loopback/link-local/CGNAT answers, and pins the resolved IP into the request as a DNS-rebinding defense. Wildcards are banned in both shapes.
 
 `hardenManifest()` runs after structural validation. It enforces strictness checks that an approver would otherwise have to enforce by eye:
 
-- **Errors** — reasons must be ≥5 words, action descriptions must be ≥5 words, no wildcards in network `hosts` or storage `scope`.
+- **Errors** — reasons must be ≥5 words, action descriptions must be ≥5 words, no wildcards in network `hosts`, `hostPolicy.registrableDomain`, or storage `scope`; `network` and `network-dynamic` keep their fields mutually exclusive (`hosts` vs `hostPolicy`).
 - **Warnings** — every permission's reason should name the action(s) that use it (`permission.reason.no_action_ref` when none are named, `permission.reason.action_ref_incomplete` when only some of N≥2 are named); manifests should not carry stray fields at the top level, inside a permission, or inside an action (`manifest.unknown_field`).
 
 `verifyManifest()` is the one-shot entry point: it runs structural validation and hardening together and returns every error and warning the manifest produces in one call. Broken subtrees from structural failure are skipped during hardening, but the rest of the manifest still gets hardened — a mixed-violation first draft surfaces every fix on the first round-trip.
@@ -147,7 +149,7 @@ Source: [`src/errors.ts`](./src/errors.ts).
 
 ### 4. Replay — every execution is reproducible
 
-Writmint records execution at the transport seam: every network response, storage read, clock value, and emitted audit event. The recording is enough to replay the capability deterministically against the same inputs. Replays detect divergence in strict order — if the recorded run made calls A → B → C and the replay tries to make A → C, it stops at C with a structured error pointing at the missing B.
+Writmint records execution at the transport seam: every network response, DNS resolution (`network.resolve`, for `network-dynamic` permissions), storage read, clock value, and emitted audit event. The recording is enough to replay the capability deterministically against the same inputs. Replays detect divergence in strict order — if the recorded run made calls A → B → C and the replay tries to make A → C, it stops at C with a structured error pointing at the missing B.
 
 Source: [`src/replay.ts`](./src/replay.ts).
 
@@ -167,7 +169,7 @@ Source: [`src/approval.ts`](./src/approval.ts).
 
 - **Phase H — failure-path correctness:** chaos-transport induces a timeout mid-flow. The runtime throws a structured error, the audit trail captures the pre-failure work, and a replay against the recording reproduces the failure deterministically.
 
-830 tests pass across `tests/{unit,integration,property,mcp}`.
+979 tests pass across `tests/{unit,integration,property,mcp,dogfood}`.
 
 ---
 
@@ -345,7 +347,7 @@ tests/
   dogfood/                     telemetry harness for the Layer 3 PreToolUse hook
 ```
 
-830 tests across 56 files, all passing.
+979 tests across 62 files, all passing.
 
 ---
 
@@ -364,6 +366,7 @@ The five pillars, the canonical demo, and the MCP server are all in. Subsequent 
 - **v0.2.x** — manifest hardening rules (wildcard hosts/scopes, reason/description length, reason-references-action warning); replay JSON stability.
 - **v0.3.x** — `manifest.unknown_field` warning; opt-in two-person rule on destructive approval (`requireDistinctDestructiveApprover`); `verifyManifest()` combined structural + hardening; `ApprovalError.allErrors` so every batch rejection arrives complete.
 - **v0.4.x** — tagged-union envelope on every MCP handler response (`{ok, data}` / `{ok, errors}`); `RuntimeError.allErrors` mirroring the v0.3.1 approval change; vitest 4 / dependency security patch.
+- **v0.5.x** — `type: "network-dynamic"` permission shape for call-time URLs: `hostPolicy` registrable-domain allowlist, resolve-once + private-IP rejection + resolved-IP pinning at the broker, `network.resolve` tape event, 21 new structured-error codes. Measured against a skill-disabled authoring agent: the host-policy dead-end that previously forced invented hostnames became a 2-round-trip mechanical recovery (dogfood pass 05b).
 
 What it does not yet ship: stable public API guarantees, broad documentation, additional demos, packaging for non-Node hosts. Those land in v0.x as the API surface settles. See [`CHANGELOG.md`](./CHANGELOG.md) for the full record.
 

@@ -4,7 +4,16 @@ All notable changes to Writmint will land here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.5.0] — 2026-06-07
+
+A minor release closing the dynamic-host tension from the dogfood
+corpus (open item #4): capabilities whose actions take user-supplied
+URLs at call time now have an honest manifest shape instead of
+inventing hostnames. Additive — existing `type: "network"` manifests,
+their tapes, and their hashes are unchanged. The one new obligation
+falls on hosts that declare `network-dynamic` permissions: their
+`NetworkTransport` must provide `resolve()` and must honor the
+`resolvedIp` pin / no-auto-redirect contract.
 
 ### Added
 
