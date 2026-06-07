@@ -29,6 +29,18 @@ export function validateProposedManifest(
     return { ok: true };
   }
 
+  // Filename gate: only files named like a manifest (`manifest.json`,
+  // `foo.manifest.jsonc`, …) are manifest candidates. The shape-marker
+  // check below is not enough on its own: Claude settings files carry a
+  // `permissions` key and were being rejected as broken manifests (caught
+  // live editing .claude/settings.local.json, 2026-06-07). Runs before
+  // JSON.parse so non-manifest .json files can never produce a
+  // manifest.parse_error deny either.
+  const base = lower.replace(/\\/g, '/').split('/').pop() ?? lower;
+  if (!/^(.+\.)?manifest\.jsonc?$/.test(base)) {
+    return { ok: true };
+  }
+
   let parsed: unknown;
   try {
     parsed = JSON.parse(source);

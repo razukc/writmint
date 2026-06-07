@@ -128,6 +128,27 @@ describe('validateProposedManifest', () => {
     });
   });
 
+  describe('non-manifest filenames (filename gate)', () => {
+    it('passes settings files silently even when they carry a permissions key', () => {
+      // Live false positive (2026-06-07): .claude/settings.local.json has a
+      // `permissions` shape marker and was denied as a broken manifest.
+      const settings = JSON.stringify({ permissions: { allow: ['Bash(node *)'] } });
+      const result = validateProposedManifest(
+        settings,
+        'C:\\code\\playground\\runtime\\.claude\\settings.local.json',
+      );
+      expect(result.ok).toBe(true);
+    });
+
+    it('still validates dotted manifest names like feature.manifest.jsonc', () => {
+      const result = validateProposedManifest(
+        JSON.stringify({ actions: [] }),
+        '/repo/feature.manifest.jsonc',
+      );
+      expect(result.ok).toBe(false);
+    });
+  });
+
   describe('non-JSON extensions (extension gate)', () => {
     // The extension gate runs BEFORE JSON.parse so non-JSON files never
     // produce a manifest.parse_error. This guards against the dogfood-pass-01
