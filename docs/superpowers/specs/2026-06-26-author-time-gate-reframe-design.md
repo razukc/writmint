@@ -44,7 +44,7 @@ leads the story. It does **not** change any code:
 
 ## Core statement
 
-**Author-time verification for AI-generated capability manifests.**
+**Verify every capability manifest your AI agents write — before you approve it.**
 
 An AI agent declares what a capability may do — every host it reaches, every field it touches,
 every action it takes. Writmint checks that declaration as the agent writes it and rejects anything
@@ -61,21 +61,23 @@ agent got wrong.
 
 **Compressed one-liner (for tight contexts):**
 
-> Author-time verification for AI-generated capability manifests — so review is a sign-off, not a
-> cleanup.
+> Verify AI-generated capability manifests at author time — so review is a sign-off, not a cleanup.
 
-**Alternate headlines** (B and C are noun-led variants kept on file; A leads):
-- A — *Author-time verification for AI-generated capability manifests.* (category-defining)
-- B — *Capability manifests, verified before they reach review.* (outcome-led)
-- C — *The verification step between an agent's draft and your approval.* (locates the product)
+**Alternate headlines** (all verb-led; A leads):
+- A — *Verify every capability manifest your AI agents write — before you approve it.* (action + payoff)
+- B — *Catch overscoped, unsafe manifests the moment an agent writes them.* (threat caught)
+- C — *Stop debugging your agents' manifests. Approve verified ones instead.* (pain removed)
 
 ### Tone rules for Tier 1 copy
 
-The copy addresses the reader and names roles; it does not narrate about "a human." Two rules:
+The copy leads with the action and addresses the reader; it does not open with a definition or
+narrate about "a human." Two rules:
 
-- **Open on the noun, not a definition.** Lead with the category ("Author-time verification…"),
-  not "Writmint is a…". The product's name carries the H1; the tagline carries the category. State
-  features in direct sentences — what it checks, what it rejects, what the agent does next.
+- **Open on a verb, not a definition.** Lead with what Writmint does for you ("Verify every
+  capability manifest…"), not "Writmint is a…" and not a category noun phrase. The product's name
+  carries the H1; the tagline is an imperative. State features in direct sentences — what it checks,
+  what it rejects, what the agent does next. ("Author-time verification" remains the *category* we
+  belong to and can name in body copy, but it does not lead.)
 - **Address the reader; name the role; never "a human."** Use "you" and the concrete role
   ("your reviewer," "the approver"). "A human approves it" reads clinical and distant; "you sign
   off on verified work" reads like it was written for the person reading it.
@@ -118,8 +120,8 @@ band they don't touch.
    the Tier-1/Tier-2 re-ranking, and the one-liner. Lives in the repo under `docs/`. Everything
    else points to it.
 
-2. **README teardown (bold)** — replace the top of the README so it opens on the category
-   (author-time verification) and the debugger→approver repositioning, in enterprise register.
+2. **README teardown (bold)** — replace the top of the README so it opens on a verb-led imperative
+   (what Writmint does for you) and the debugger→approver repositioning, in enterprise register.
    The "Show, by failing" four-beat demo is retained as the proof-by-demonstration centerpiece
    (it already *is* the gate in action), but the framing around it is rewritten, and the
    "five pillars" peer list is restructured into the Tier-1/Tier-2 split. Drafted prose below.
@@ -128,7 +130,7 @@ band they don't touch.
 
 > # Writmint
 >
-> **Author-time verification for AI-generated capability manifests.**
+> **Verify every capability manifest your AI agents write — before you approve it.**
 >
 > When an AI agent builds a capability, it declares what that capability may do — every host it
 > reaches, every field it touches, every action it takes. Writmint checks that declaration *as the
