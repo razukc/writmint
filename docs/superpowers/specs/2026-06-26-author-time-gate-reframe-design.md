@@ -44,7 +44,7 @@ leads the story. It does **not** change any code:
 
 ## Core statement
 
-**Verify every capability manifest your AI agents write — before you approve it.**
+**Verifies every capability manifest your AI agents write, then hands you a clean one to approve.**
 
 An AI agent declares what a capability may do — every host it reaches, every field it touches,
 every action it takes. Writmint checks that declaration as the agent writes it and rejects anything
@@ -61,23 +61,25 @@ agent got wrong.
 
 **Compressed one-liner (for tight contexts):**
 
-> Verify AI-generated capability manifests at author time — so review is a sign-off, not a cleanup.
+> Verifies AI-generated capability manifests at author time — so review is a sign-off, not a cleanup.
 
-**Alternate headlines** (all verb-led; A leads):
-- A — *Verify every capability manifest your AI agents write — before you approve it.* (action + payoff)
-- B — *Catch overscoped, unsafe manifests the moment an agent writes them.* (threat caught)
-- C — *Stop debugging your agents' manifests. Approve verified ones instead.* (pain removed)
+**Alternate headlines** (all lead with Writmint's verb; A leads):
+- A — *Verifies every capability manifest your AI agents write, then hands you a clean one to approve.* (action → payoff)
+- B — *Catches overscoped, unsafe manifests the moment an agent writes them — so you approve, not debug.* (threat caught)
+- C — *Rejects every flawed manifest at author time, and tells the agent exactly what to fix.* (the loop)
 
 ### Tone rules for Tier 1 copy
 
-The copy leads with the action and addresses the reader; it does not open with a definition or
-narrate about "a human." Two rules:
+The copy leads with Writmint's action and addresses the reader; it does not open with a definition
+or narrate about "a human." Two rules:
 
-- **Open on a verb, not a definition.** Lead with what Writmint does for you ("Verify every
-  capability manifest…"), not "Writmint is a…" and not a category noun phrase. The product's name
-  carries the H1; the tagline is an imperative. State features in direct sentences — what it checks,
-  what it rejects, what the agent does next. ("Author-time verification" remains the *category* we
-  belong to and can name in body copy, but it does not lead.)
+- **Open on Writmint's verb, then the reader's action.** Lead with what Writmint *does*
+  ("Verifies every capability manifest…"), with Writmint as the implied subject — not "Writmint is
+  a…" and not a category noun phrase. What you do ("…you approve") comes after, as the payoff. The
+  product's name carries the H1; the tagline starts on the product's verb. State features in direct
+  sentences — what it checks, what it rejects, what the agent does next. ("Author-time
+  verification" remains the *category* we belong to and can name in body copy, but it does not
+  lead.)
 - **Address the reader; name the role; never "a human."** Use "you" and the concrete role
   ("your reviewer," "the approver"). "A human approves it" reads clinical and distant; "you sign
   off on verified work" reads like it was written for the person reading it.
@@ -120,8 +122,9 @@ band they don't touch.
    the Tier-1/Tier-2 re-ranking, and the one-liner. Lives in the repo under `docs/`. Everything
    else points to it.
 
-2. **README teardown (bold)** — replace the top of the README so it opens on a verb-led imperative
-   (what Writmint does for you) and the debugger→approver repositioning, in enterprise register.
+2. **README teardown (bold)** — replace the top of the README so it opens on Writmint's verb
+   (what the product does, the reader's action following) and the debugger→approver repositioning,
+   in enterprise register.
    The "Show, by failing" four-beat demo is retained as the proof-by-demonstration centerpiece
    (it already *is* the gate in action), but the framing around it is rewritten, and the
    "five pillars" peer list is restructured into the Tier-1/Tier-2 split. Drafted prose below.
@@ -130,7 +133,7 @@ band they don't touch.
 
 > # Writmint
 >
-> **Verify every capability manifest your AI agents write — before you approve it.**
+> **Verifies every capability manifest your AI agents write, then hands you a clean one to approve.**
 >
 > When an AI agent builds a capability, it declares what that capability may do — every host it
 > reaches, every field it touches, every action it takes. Writmint checks that declaration *as the
