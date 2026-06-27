@@ -44,43 +44,49 @@ leads the story. It does **not** change any code:
 
 ## Core statement
 
-**Writmint is an author-time verification layer for AI-generated capability manifests.**
+**Author-time verification for AI-generated capability manifests.**
 
-An AI agent declares what a capability may do — the hosts it reaches, the data it touches, the
-actions it takes. Writmint rejects any manifest that is underspecified, overscoped, or unsafe,
-returning deterministic, machine-readable errors the agent corrects against on its own. By the
-time a manifest reaches a human, approval is a **sign-off on verified work, not a search for the
-agent's mistakes.**
+An AI agent declares what a capability may do — every host it reaches, every field it touches,
+every action it takes. Writmint checks that declaration as the agent writes it and rejects anything
+underspecified, overscoped, or unsafe, returning deterministic, machine-readable errors the agent
+fixes on its own. By review time, you sign off on verified work instead of hunting for what the
+agent got wrong.
 
 **Supporting sentence (the competitive contrast, made defensible):**
 
-> Most agent platforms catch manifest mistakes at runtime, when the capability tries to act, or
-> downstream, when a human reads the generated artifact at review. Both cast the human as the
-> agent's debugger. Writmint moves the correction earlier and makes it deterministic — and keeps
-> the human as the approver, where regulated environments require them.
+> Most agent platforms surface manifest mistakes at runtime, when the capability tries to act, or
+> downstream, when the manifest reaches a pull request — leaving your reviewer to debug the agent.
+> Writmint moves the correction earlier and makes it deterministic, so review stays a place to
+> approve, not repair.
 
 **Compressed one-liner (for tight contexts):**
 
-> Author-time verification for AI-generated capability manifests — so human approval is a
-> sign-off, not a cleanup.
+> Author-time verification for AI-generated capability manifests — so review is a sign-off, not a
+> cleanup.
 
-### Why this register, and why the human stays in the loop
+**Alternate headlines** (B and C are noun-led variants kept on file; A leads):
+- A — *Author-time verification for AI-generated capability manifests.* (category-defining)
+- B — *Capability manifests, verified before they reach review.* (outcome-led)
+- C — *The verification step between an agent's draft and your approval.* (locates the product)
 
-The earlier draft's "before a human ever sees them" was wrong: in the settled PR-review ritual,
-humans *do* see the manifest. The real difference is not *whether* a human sees it but *what state
-it is in when they do* — raw agent output (today) vs. a machine-verified artifact (Writmint). The
-framing keeps the human in the loop and repositions their job: **debugger → approver.**
+### Tone rules for Tier 1 copy
 
-This is not a hedge. In regulated environments — bank, healthcare, insurance, Writmint's anchor
-scenario — **segregation of duties requires the approver not be the author.** A human approval gate
-is mandatory there, so "the human still approves" is compliance alignment, not weakness. The honest
-framing and the enterprise-credible framing are the same framing.
+The copy addresses the reader and names roles; it does not narrate about "a human." Two rules:
 
-Two deliberate language choices for the enterprise buyer:
-- Lead with the **category** ("author-time verification"), the term a security team will file us
-  under — not a metaphor. "Gate" describes the place; "verification layer" names the category.
-- Replace casual verbs ("fix its manifest") with precise ones ("corrects against deterministic,
-  machine-readable errors") that name the differentiator.
+- **Open on the noun, not a definition.** Lead with the category ("Author-time verification…"),
+  not "Writmint is a…". The product's name carries the H1; the tagline carries the category. State
+  features in direct sentences — what it checks, what it rejects, what the agent does next.
+- **Address the reader; name the role; never "a human."** Use "you" and the concrete role
+  ("your reviewer," "the approver"). "A human approves it" reads clinical and distant; "you sign
+  off on verified work" reads like it was written for the person reading it.
+
+The substance under the tone is unchanged and still load-bearing: the difference is not *whether*
+someone reviews the manifest — in today's PR-review ritual they do — but *what state it is in when
+they do.* Raw agent output (today) vs. a machine-verified artifact (Writmint). That repositions the
+reviewer's job from **debugger → approver**, which is not a hedge but a compliance fit: in regulated
+environments (banking, healthcare, insurance — Writmint's anchor scenario), **segregation of duties
+requires the approver not be the author.** A standing approval step is mandatory there, so "you
+still approve" is alignment, not weakness.
 
 ## Pillar hierarchy under the reframe
 
@@ -93,16 +99,16 @@ around it:
 - **Feature Manifest** (`feature-manifest.ts`) — the artifact the agent is making approvable.
   Sits beside the gate as necessary context.
 
-**Tier 2 — What makes a passed manifest trustworthy (why a human can approve in one look):**
+**Tier 2 — What makes a passed manifest trustworthy (why you can approve in one look):**
 - **Approval lifecycle + audit** (`approval.ts`) — hash-bound approval turns "agent says it's
-  clean" into "human signed these exact bytes." The *payoff* of the gate.
+  clean" into "you signed these exact bytes." The *payoff* of the gate.
 - **Capability model + enforcement** (`capabilities.ts`) — proves declared scope is actually
   enforced.
 - **Replay** (`replay.ts`) — proves the approved manifest behaves deterministically.
 
 **Narrative shift:** stop saying "5 pillars for safe execution." Start saying: "an agent corrects
 its manifest against machine-readable verification (Tier 1), and because the result is hash-bound,
-enforced, and replayable (Tier 2), a human can approve it in one look." We deliberately do not
+enforced, and replayable (Tier 2), you can approve it in one look." We deliberately do not
 lead with Tier 2 — that is the territory Microsoft/Cisco own at runtime. We lead with the Tier 1
 band they don't touch.
 
@@ -124,22 +130,21 @@ band they don't touch.
 >
 > **Author-time verification for AI-generated capability manifests.**
 >
-> When an AI agent builds a capability, it must declare what that capability may do — the hosts it
-> reaches, the data it touches, the actions it takes. Writmint verifies that declaration *as the
-> agent writes it*: every underspecified, overscoped, or unsafe manifest is rejected with a
-> deterministic, machine-readable error the agent corrects against on its own, before any human is
-> involved.
+> When an AI agent builds a capability, it declares what that capability may do — every host it
+> reaches, every field it touches, every action it takes. Writmint checks that declaration *as the
+> agent writes it* and rejects anything underspecified, overscoped, or unsafe, returning a
+> deterministic, machine-readable error the agent fixes on its own — before the manifest ever
+> reaches you.
 >
-> The result changes what human approval *is*. Most agent platforms surface manifest mistakes at
-> runtime — when the capability tries to act — or downstream, when a reviewer reads the generated
-> artifact in a pull request. Both cast the human as the agent's debugger. Writmint moves the
-> correction earlier and makes it deterministic, so the human stays the **approver**: they sign off
-> on verified work, not hunt for what the agent got wrong.
+> That changes what review *is*. Most agent platforms surface manifest mistakes at runtime, when
+> the capability tries to act, or downstream, when the manifest lands in a pull request — leaving
+> your reviewer to debug the agent. Writmint moves the correction earlier and makes it
+> deterministic, so review stays a place to approve, not repair.
 >
-> In regulated environments — banking, healthcare, insurance — that human approval gate is
-> mandatory: segregation of duties requires that the approver is not the author. Writmint is built
-> for exactly that boundary. The agent authors and self-corrects; the human approves a manifest
-> that has already been verified and is cryptographically bound to what they signed.
+> In banking, healthcare, and insurance, that approval step is mandatory: segregation of duties
+> requires that the approver is not the author. Writmint is built for exactly that boundary. The
+> agent authors and corrects its own work; you approve a manifest that arrives already verified and
+> cryptographically bound to what you signed.
 >
 > > **Status: v0.5.x — early.** The API surface is stable enough for the demo below, not yet stable
 > > enough to depend on. Issues and feedback welcome.
@@ -166,7 +171,7 @@ preserved verbatim — only the grouping, ordering, and section headers change:
 >
 > ### What makes a verified manifest trustworthy
 >
-> *(the Tier-2 scaffolding — why a human can approve quickly, and why the approval means something)*
+> *(the Tier-2 scaffolding — why you can approve quickly, and why the approval means something)*
 > - **Approval — hash-bound, lifecycle-tracked, audited** *(was pillar 5)*
 > - **Permissions — the broker boundary** *(was pillar 2)*
 > - **Replay — every execution is reproducible** *(was pillar 4)*
@@ -233,7 +238,7 @@ we will say so rather than quietly drop the claim.
 ## Success criteria
 
 - A reader of the README's first screen understands Writmint as author-time verification that an
-  agent corrects against, leaving the human as approver rather than debugger — without reading the
+  agent corrects against, leaving the reviewer to approve rather than debug — without reading the
   pillar deep-dives.
 - The positioning doc gives every external surface (README, future outreach, docs) one consistent
   framing to point at.
