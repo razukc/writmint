@@ -1,0 +1,1 @@
+{ "shape": "_selftest", "difficulty": "structural", "skillArm": "off", "trap": null, "notes": "harness self-test: must be reported FAIL; excluded from corpus aggregation" }

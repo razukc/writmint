@@ -1,0 +1,8 @@
+{
+  "fixtureId": "_selftest-never-converges",
+  "attempts": [
+    { "n": 1, "manifest": { "id": "broken" } },
+    { "n": 2, "manifest": { "id": "broken" } },
+    { "n": 3, "manifest": { "id": "broken" } }
+  ]
+}
