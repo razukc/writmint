@@ -55,15 +55,19 @@ export function computeSegments(results: AttemptResult[]): SegmentReport[] {
   const reports: SegmentReport[] = [];
   for (const [cluster, start] of firstSeen) {
     let roundTripsSpent = 0;
-    let resolvedAtAttempt: number | null = null;
+    let lastPresentIndex = -1;
     for (let i = start; i < clustersByAttempt.length; i++) {
       if (clustersByAttempt[i].has(cluster)) {
         roundTripsSpent++;
-      } else {
-        resolvedAtAttempt = i + 1;
-        break;
+        lastPresentIndex = i;
       }
     }
+    // resolvedAtAttempt is set only if the cluster is absent in the final attempt
+    // otherwise null (never resolved). If absent at final attempt, it's lastPresentIndex + 2
+    // (converting the next absent attempt to 1-based)
+    const resolvedAtAttempt = lastPresentIndex < clustersByAttempt.length - 1
+      ? lastPresentIndex + 2
+      : null;
     reports.push({ cluster, roundTripsSpent, resolvedAtAttempt });
   }
   // sort by first appearance for stable, readable output

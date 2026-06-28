@@ -64,4 +64,18 @@ describe('computeSegments', () => {
       { cluster: 'manifest', roundTripsSpent: 2, resolvedAtAttempt: null },
     ]);
   });
+
+  it('counts reappearing clusters across gaps (present@1, gone@2, back@3)', () => {
+    // manifest present in attempt 1, absent in attempt 2, back in attempt 3
+    const results: AttemptResult[] = [
+      { valid: false, errors: [{ code: 'manifest.schema_version', where: '$.schemaVersion' }] },
+      { valid: false, errors: [{ code: 'string.required', where: '$.title' }] },
+      { valid: false, errors: [{ code: 'manifest.schema_version', where: '$.schemaVersion' }] },
+    ];
+    const segs = computeSegments(results);
+    expect(segs).toEqual([
+      { cluster: 'manifest', roundTripsSpent: 2, resolvedAtAttempt: null },
+      { cluster: 'string', roundTripsSpent: 1, resolvedAtAttempt: 3 },
+    ]);
+  });
 });
