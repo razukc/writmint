@@ -25,6 +25,7 @@
     "test:verbose": "vitest run",
     "test:watch": "vitest",
     "mcp": "tsx tools/mcp/server.ts",
+    "dogfood:corpus": "tsx fixtures/dogfood-corpus/run-corpus.ts",
     "demo": "npm run demo:smoke && npm run demo:approval && npm run demo:replay && npm run demo:e2e",
     "demo:smoke": "tsx fixtures/suspicious-transaction-triage/smoke.ts",
     "demo:approval": "tsx fixtures/suspicious-transaction-triage/approval-smoke.ts",
