@@ -79,3 +79,52 @@ describe('computeSegments', () => {
     ]);
   });
 });
+
+import { computeVerdict, detectOscillation, ROUND_TRIP_CEILING } from '../../fixtures/dogfood-corpus/metrics.js';
+
+const err = (code: string, where: string) => ({ valid: false, errors: [{ code, where }] });
+const ok = { valid: true, errors: [] };
+
+describe('detectOscillation', () => {
+  it('flags the same (code, where) recurring 3+ times without distinct-count dropping', () => {
+    const results: AttemptResult[] = [
+      err('permission.type', '$.permissions[0].type'),
+      err('permission.type', '$.permissions[0].type'),
+      err('permission.type', '$.permissions[0].type'),
+    ];
+    expect(detectOscillation(results)).toBe(true);
+  });
+
+  it('does not flag steady progress even if a code repeats twice', () => {
+    // 05b: codes change and outstanding count trends down to zero
+    const results: AttemptResult[] = [
+      { valid: false, errors: [{ code: 'manifest.schema_version', where: '$.schemaVersion' }, { code: 'string.required', where: '$.title' }] },
+      { valid: false, errors: [{ code: 'permission.type', where: '$.permissions[0].type' }] },
+      ok,
+    ];
+    expect(detectOscillation(results)).toBe(false);
+  });
+});
+
+describe('computeVerdict', () => {
+  it('PASS when it converges within the ceiling', () => {
+    const results = [err('a', '$'), err('b', '$'), ok];
+    expect(computeVerdict(results)).toMatchObject({ kind: 'PASS', totalRoundTrips: 3 });
+  });
+
+  it('FLAG when it converges but exceeds the ceiling', () => {
+    const results: AttemptResult[] = [];
+    for (let i = 0; i < ROUND_TRIP_CEILING; i++) results.push(err(`c${i}`, `$.${i}`));
+    results.push(ok); // accepts on attempt CEILING+1
+    expect(computeVerdict(results)).toMatchObject({ kind: 'FLAG' });
+  });
+
+  it('FAIL when it never converges', () => {
+    expect(computeVerdict([err('a', '$'), err('b', '$')])).toMatchObject({ kind: 'FAIL' });
+  });
+
+  it('FAIL on oscillation even though it could converge later', () => {
+    const results = [err('x', '$.p'), err('x', '$.p'), err('x', '$.p'), ok];
+    expect(computeVerdict(results)).toMatchObject({ kind: 'FAIL' });
+  });
+});
