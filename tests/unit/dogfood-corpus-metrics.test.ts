@@ -128,3 +128,44 @@ describe('computeVerdict', () => {
     expect(computeVerdict(results)).toMatchObject({ kind: 'FAIL' });
   });
 });
+
+import { computeCorpusVerdict, median, type FixtureSummary } from '../../fixtures/dogfood-corpus/metrics.js';
+
+const summary = (
+  fixtureId: string, shape: string, skillArm: 'on' | 'off',
+  kind: 'PASS' | 'FLAG' | 'FAIL', totalRoundTrips: number | null
+): FixtureSummary => ({ fixtureId, shape, skillArm, verdict: { kind, totalRoundTrips, reason: '' } });
+
+describe('median', () => {
+  it('handles odd and even lengths and empty', () => {
+    expect(median([5])).toBe(5);
+    expect(median([1, 3])).toBe(2);
+    expect(median([])).toBe(null);
+  });
+});
+
+describe('computeCorpusVerdict', () => {
+  it('does not fire when skill-off is comparable to skill-on', () => {
+    const cv = computeCorpusVerdict([
+      summary('net-on', 'network', 'on', 'PASS', 3),
+      summary('net-off', 'network', 'off', 'PASS', 4),
+    ]);
+    expect(cv.killConditionFired).toBe(false);
+  });
+
+  it('fires when skill-off median is >= 2x skill-on median', () => {
+    const cv = computeCorpusVerdict([
+      summary('a-on', 'network', 'on', 'PASS', 2),
+      summary('b-off', 'network', 'off', 'PASS', 5),
+    ]);
+    expect(cv.killConditionFired).toBe(true);
+  });
+
+  it('fires when a shape passes skill-on but fails skill-off', () => {
+    const cv = computeCorpusVerdict([
+      summary('s-on', 'storage', 'on', 'PASS', 3),
+      summary('s-off', 'storage', 'off', 'FAIL', null),
+    ]);
+    expect(cv.killConditionFired).toBe(true);
+  });
+});

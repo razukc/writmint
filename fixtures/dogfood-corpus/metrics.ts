@@ -130,3 +130,64 @@ export function computeVerdict(results: AttemptResult[]): Verdict {
   }
   return { kind: 'PASS', totalRoundTrips, reason: `converged in ${totalRoundTrips} round-trips` };
 }
+
+export interface FixtureSummary {
+  fixtureId: string;
+  shape: string;
+  skillArm: 'on' | 'off';
+  verdict: Verdict;
+}
+
+export interface CorpusVerdict {
+  killConditionFired: boolean;
+  reason: string;
+  skillOnMedian: number | null;
+  skillOffMedian: number | null;
+}
+
+export function median(xs: number[]): number | null {
+  if (xs.length === 0) return null;
+  const s = [...xs].sort((a, b) => a - b);
+  const mid = Math.floor(s.length / 2);
+  return s.length % 2 === 0 ? (s[mid - 1] + s[mid]) / 2 : s[mid];
+}
+
+export function computeCorpusVerdict(summaries: FixtureSummary[]): CorpusVerdict {
+  const rt = (arm: 'on' | 'off') =>
+    summaries
+      .filter((s) => s.skillArm === arm && typeof s.verdict.totalRoundTrips === 'number')
+      .map((s) => s.verdict.totalRoundTrips as number);
+  const skillOnMedian = median(rt('on'));
+  const skillOffMedian = median(rt('off'));
+
+  // per-shape PASS(on) -> FAIL(off) regression
+  const shapes = new Set(summaries.map((s) => s.shape));
+  for (const shape of shapes) {
+    const on = summaries.find((s) => s.shape === shape && s.skillArm === 'on');
+    const off = summaries.find((s) => s.shape === shape && s.skillArm === 'off');
+    if (on?.verdict.kind === 'PASS' && off?.verdict.kind === 'FAIL') {
+      return {
+        killConditionFired: true,
+        reason: `shape "${shape}" passes skill-on but FAILs skill-off — value is in the prose skill, not the structured contract`,
+        skillOnMedian,
+        skillOffMedian,
+      };
+    }
+  }
+
+  if (skillOnMedian !== null && skillOffMedian !== null && skillOffMedian >= 2 * skillOnMedian) {
+    return {
+      killConditionFired: true,
+      reason: `skill-off median (${skillOffMedian}) >= 2x skill-on median (${skillOnMedian}) — thesis disconfirmed for this corpus`,
+      skillOnMedian,
+      skillOffMedian,
+    };
+  }
+
+  return {
+    killConditionFired: false,
+    reason: 'skill-off convergence comparable to skill-on; thesis not disconfirmed by this corpus',
+    skillOnMedian,
+    skillOffMedian,
+  };
+}
