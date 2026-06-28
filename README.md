@@ -1,10 +1,16 @@
 # Writmint
 
-**Writmint is a verifier for capabilities an author can't author past.**
+**Verifies every capability manifest your AI agents write, then hands you a clean one to approve.**
 
-You let an AI agent write a capability. Writmint refuses to let the capability do anything its manifest doesn't account for — and tells the agent exactly what to fix when it tries.
+When an AI agent builds a capability, it declares what that capability may do — every host it reaches, every field it touches, every action it takes. Writmint checks that declaration *as the agent writes it* and rejects anything underspecified, overscoped, or unsafe, returning a deterministic, machine-readable error the agent fixes on its own — before the manifest ever reaches you.
+
+That changes what review *is*. Most agent platforms surface manifest mistakes at runtime, when the capability tries to act, or downstream, when the manifest lands in a pull request — leaving your reviewer to debug the agent. Writmint moves the correction earlier and makes it deterministic, so review stays a place to approve, not repair.
+
+In banking, healthcare, and insurance, that approval step is mandatory: segregation of duties requires that the approver is not the author. Writmint is built for exactly that boundary. The agent authors and corrects its own work; you approve a manifest that arrives already verified and cryptographically bound to what you signed.
 
 > Status: **v0.5.x — early.** API surface is stable enough for the demo below, not yet stable enough to depend on. Issues and feedback welcome.
+
+See [positioning](./docs/positioning.md) for the full framing and [competitive landscape](./docs/competitive-landscape.md) for where this stands against runtime-governance tools and MCP's own standards.
 
 ---
 
@@ -100,15 +106,35 @@ await net.request({ url: 'https://evil.example.com/x', method: 'GET' });
 
 Every brokered call lands in `sink.events`. The recording is enough to replay the whole run later, deterministically, against the same inputs — and detect divergence in strict call order.
 
-That is the entire loop: **declare → submit (hardened) → approve (hashed) → run (brokered) → replay (recorded)**. An agent who cannot read these errors cannot ship a capability past Writmint.
+That is the entire loop: **declare → submit (hardened) → approve (hashed) → run (brokered) → replay (recorded)**. The agent corrects against the structured error on its own; what reaches you is a manifest that already passed. An agent that cannot read these errors cannot ship a capability past Writmint.
 
 ---
 
-## The five pillars
+## How it works
 
-Each pillar is one file in `src/` (pillar 2 gained a second, `host-policy.ts`, in v0.5.0).
+Writmint is one verification gate and the scaffolding that makes a passed manifest trustworthy. Each piece below is one file in `src/` (the broker boundary gained a second, `host-policy.ts`, in v0.5.0).
 
-### 1. Capability manifest — the declarative contract
+### The gate — verification an agent corrects against
+
+#### Structured errors — every failure has a fix-hint
+
+Every error Writmint throws carries the same shape:
+
+```ts
+{
+  code: 'permission.network.host_denied',
+  where: 'NetworkBroker.request',
+  expected: ['core-banking.internal'],
+  actual: 'evil.example.com',
+  fixHint: 'Add evil.example.com to permission core.transactions.hosts, or route this call through a different permission.',
+}
+```
+
+An agent reading a failure has a deterministic place to look for what went wrong and what to change.
+
+Source: [`src/errors.ts`](./src/errors.ts).
+
+#### The capability manifest — the declarative contract
 
 A `CapabilityManifest` names the capability, lists every permission it needs (network hosts, dynamic host policies, storage scopes, ui, clock, audit), and declares its actions. The runtime only executes what the manifest declares.
 
@@ -142,7 +168,19 @@ With `denyPrivate` on (the default), the broker resolves each hostname once per 
 
 Source: [`src/capability-manifest.ts`](./src/capability-manifest.ts).
 
-### 2. Permissions — the broker boundary
+### What makes a verified manifest trustworthy
+
+Verification gets the manifest correct. These three make a correct manifest worth approving: the approval is bound to the exact bytes, the declared scope is actually enforced at runtime, and every run can be replayed to prove what happened.
+
+#### Approval — hash-bound, lifecycle-tracked, audited
+
+A capability moves through a lifecycle: `draft → submitted → approved → active → revoked`. The approval is bound to a SHA-256 hash of the manifest. Modify the manifest by one byte after approval and the runtime refuses to execute. Every transition emits an audit event; sensitive paths declared in the manifest are redacted before they reach the audit sink.
+
+If any action sets `destructive: true`, `approve()` additionally requires a `destructiveApprovedBy` value — silent at `submit()` / `validate()`, surfaces only at approve time as `approval.destructive_required`. For a stricter two-person rule, set `requireDistinctDestructiveApprover: true` on the destructive action(s); `approve()` then rejects identical `approvedBy` and `destructiveApprovedBy` with `approval.destructive.same_approver`. The flag is per-action and hash-bound, so a same-actor approval cannot be done by unflagging post-submit.
+
+Source: [`src/approval.ts`](./src/approval.ts).
+
+#### Permissions — the broker boundary
 
 A capability cannot make a network call, write to storage, render UI, read the clock, or emit audit events except through a *broker* the runtime hands it. Brokers are scoped to the permissions the manifest declared. Anything else throws a `PermissionError` with a structured payload pointing at the exact violation.
 
@@ -152,43 +190,17 @@ Handlers are oblivious to which network shape backs a permission — `net.reques
 
 Source: [`src/permissions.ts`](./src/permissions.ts), with the host-policy checks (domain matcher, IP classifier, private-range table) in [`src/host-policy.ts`](./src/host-policy.ts).
 
-### 3. Structured errors — every failure has a fix-hint
-
-Every error Writmint throws carries the same shape:
-
-```ts
-{
-  code: 'permission.network.host_denied',
-  where: 'NetworkBroker.request',
-  expected: ['core-banking.internal'],
-  actual: 'evil.example.com',
-  fixHint: 'Add evil.example.com to permission core.transactions.hosts, or route this call through a different permission.',
-}
-```
-
-An agent reading a failure has a deterministic place to look for what went wrong and what to change.
-
-Source: [`src/errors.ts`](./src/errors.ts).
-
-### 4. Replay — every execution is reproducible
+#### Replay — every execution is reproducible
 
 Writmint records execution at the transport seam: every network response, DNS resolution (`network.resolve`, for `network-dynamic` permissions), storage read, clock value, and emitted audit event. The recording is enough to replay the capability deterministically against the same inputs. Replays detect divergence in strict order — if the recorded run made calls A → B → C and the replay tries to make A → C, it stops at C with a structured error pointing at the missing B.
 
 Source: [`src/replay.ts`](./src/replay.ts).
 
-### 5. Approval — hash-bound, lifecycle-tracked, audited
-
-A capability moves through a lifecycle: `draft → submitted → approved → active → revoked`. The approval is bound to a SHA-256 hash of the manifest. Modify the manifest by one byte after approval and the runtime refuses to execute. Every transition emits an audit event; sensitive paths declared in the manifest are redacted before they reach the audit sink.
-
-If any action sets `destructive: true`, `approve()` additionally requires a `destructiveApprovedBy` value — silent at `submit()` / `validate()`, surfaces only at approve time as `approval.destructive_required`. For a stricter two-person rule, set `requireDistinctDestructiveApprover: true` on the destructive action(s); `approve()` then rejects identical `approvedBy` and `destructiveApprovedBy` with `approval.destructive.same_approver`. The flag is per-action and hash-bound, so a same-actor approval cannot be done by unflagging post-submit.
-
-Source: [`src/approval.ts`](./src/approval.ts).
-
 ---
 
 ## The canonical demo
 
-[`fixtures/suspicious-transaction-triage/`](./fixtures/suspicious-transaction-triage/) is the end-to-end demo: an analyst reviewing a flagged transaction, pulling customer and account history, running a sanctions/watchlist check, and writing a decision back to a case-management system. It exercises all five pillars across 24 phases (A–H), including:
+[`fixtures/suspicious-transaction-triage/`](./fixtures/suspicious-transaction-triage/) is the end-to-end demo: an analyst reviewing a flagged transaction, pulling customer and account history, running a sanctions/watchlist check, and writing a decision back to a case-management system. It exercises the full verification-and-trust path across 24 phases (A–H), including:
 
 - **Phase H — failure-path correctness:** chaos-transport induces a timeout mid-flow. The runtime throws a structured error, the audit trail captures the pre-failure work, and a replay against the recording reproduces the failure deterministically.
 
@@ -317,7 +329,7 @@ For the full picture — including replay, destructive-action gating, redaction,
 
 ## MCP server
 
-For agents driving Writmint through the Model Context Protocol, the package ships an MCP server exposing the same pillars: `validate_manifest`, `submit_manifest`, `approve_manifest`, `hash_manifest`, `record`, `replay`, `audit_events`, `format_error`.
+For agents driving Writmint through the Model Context Protocol, the package ships an MCP server exposing the same surface: `validate_manifest`, `submit_manifest`, `approve_manifest`, `hash_manifest`, `record`, `replay`, `audit_events`, `format_error`.
 
 ```bash
 npm run mcp   # tsx tools/mcp/server.ts
@@ -343,12 +355,12 @@ The `writmint-authoring` Claude Code skill (`~/.claude/skills/writmint-authoring
 
 ```
 src/
-  capability-manifest.ts       Pillar 1 — declarative contract + hardenManifest()
-  permissions.ts               Pillar 2 — broker boundary, scoped enforcement
-  host-policy.ts               Pillar 2 — hostPolicy checks for network-dynamic (SSRF defense)
-  errors.ts                    Pillar 3 — structured errors with fix-hints
-  replay.ts                    Pillar 4 — record/replay over the transport seam
-  approval.ts                  Pillar 5 — hash-bound approval lifecycle + audit
+  capability-manifest.ts       Declarative contract + hardenManifest()
+  permissions.ts               Broker boundary, scoped enforcement
+  host-policy.ts               hostPolicy checks for network-dynamic (SSRF defense)
+  errors.ts                    Structured errors with fix-hints
+  replay.ts                    Record/replay over the transport seam
+  approval.ts                  Hash-bound approval lifecycle + audit
 
 fixtures/
   suspicious-transaction-triage/   the canonical end-to-end demo
@@ -360,7 +372,7 @@ fixtures/
     chaos-transport.ts             fault-injection wrapper used by phase H
 
 tools/
-  mcp/                         MCP server exposing the pillars (npm run mcp)
+  mcp/                         MCP server exposing the API (npm run mcp)
   dogfood/                     PreToolUse hook script + telemetry for dogfood passes
 
 tests/
@@ -385,7 +397,7 @@ Writmint targets enterprise environments; the patent grant in Apache-2.0 is inte
 
 ## Status and roadmap
 
-The five pillars, the canonical demo, and the MCP server are all in. Subsequent v0.x releases have tightened the authoring surface based on dogfood feedback from agents writing manifests against the live system:
+The verification gate, the trust scaffolding, the canonical demo, and the MCP server are all in. Subsequent v0.x releases have tightened the authoring surface based on dogfood feedback from agents writing manifests against the live system:
 
 - **v0.2.x** — manifest hardening rules (wildcard hosts/scopes, reason/description length, reason-references-action warning); replay JSON stability.
 - **v0.3.x** — `manifest.unknown_field` warning; opt-in two-person rule on destructive approval (`requireDistinctDestructiveApprover`); `verifyManifest()` combined structural + hardening; `ApprovalError.allErrors` so every batch rejection arrives complete.
