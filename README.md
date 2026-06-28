@@ -10,7 +10,7 @@ In banking, healthcare, and insurance, that approval step is mandatory: segregat
 
 > Status: **v0.5.x — early.** API surface is stable enough for the demo below, not yet stable enough to depend on. Issues and feedback welcome.
 
-See [positioning](./docs/positioning.md) for the full framing and [competitive landscape](./docs/competitive-landscape.md) for where this stands against runtime-governance tools and MCP's own standards.
+See [positioning](./docs/positioning.md) for the full framing — including the behavioral premise this rests on and where it is still unproven — and [competitive landscape](./docs/competitive-landscape.md) for where this stands against runtime-governance tools and MCP's own standards.
 
 ---
 
