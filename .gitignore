@@ -12,3 +12,6 @@ coverage/
 
 .kiro
 test-output.json
+# Session-local artifacts (not part of the project)
+.graphify_python
+CLAUDE.md
