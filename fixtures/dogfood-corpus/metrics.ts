@@ -23,3 +23,50 @@ export function computeConvergence(results: AttemptResult[]): Convergence {
   if (idx === -1) return { converged: false, totalRoundTrips: null };
   return { converged: true, totalRoundTrips: idx + 1 };
 }
+
+export interface SegmentReport {
+  cluster: string;
+  roundTripsSpent: number;
+  resolvedAtAttempt: number | null;
+}
+
+/**
+ * Cluster = first dotted token, except the two network sub-namespaces which
+ * use their first two tokens so the host-policy lesson stays distinct from
+ * generic permission errors.
+ */
+export function clusterOf(code: string): string {
+  const parts = code.split('.');
+  if (parts[0] === 'permission' && (parts[1] === 'network' || parts[1] === 'network-dynamic')) {
+    return `${parts[0]}.${parts[1]}`;
+  }
+  return parts[0] ?? code;
+}
+
+export function computeSegments(results: AttemptResult[]): SegmentReport[] {
+  const clustersByAttempt = results.map(
+    (r) => new Set(r.errors.map((e) => clusterOf(e.code)))
+  );
+  const firstSeen = new Map<string, number>();
+  clustersByAttempt.forEach((set, i) => {
+    for (const c of set) if (!firstSeen.has(c)) firstSeen.set(c, i);
+  });
+
+  const reports: SegmentReport[] = [];
+  for (const [cluster, start] of firstSeen) {
+    let roundTripsSpent = 0;
+    let resolvedAtAttempt: number | null = null;
+    for (let i = start; i < clustersByAttempt.length; i++) {
+      if (clustersByAttempt[i].has(cluster)) {
+        roundTripsSpent++;
+      } else {
+        resolvedAtAttempt = i + 1;
+        break;
+      }
+    }
+    reports.push({ cluster, roundTripsSpent, resolvedAtAttempt });
+  }
+  // sort by first appearance for stable, readable output
+  reports.sort((a, b) => (firstSeen.get(a.cluster)! - firstSeen.get(b.cluster)!));
+  return reports;
+}
