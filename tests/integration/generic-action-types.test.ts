@@ -372,7 +372,11 @@ describe('Generic Action Types Integration Tests', () => {
       const elapsed = Date.now() - startTime;
 
       expect(result).toBe('delayed-result');
-      expect(elapsed).toBeGreaterThanOrEqual(50);
+      // setTimeout/Date.now can report a hair under the requested delay (timer
+      // and clock resolution differ across platforms), so allow a small underrun.
+      // The resolved value above already proves the Promise was awaited; this
+      // assertion only confirms a real asynchronous delay occurred.
+      expect(elapsed).toBeGreaterThanOrEqual(45);
     });
 
     it('should handle multiple actions with different generic types (Requirement 6.3)', async () => {
