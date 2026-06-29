@@ -4,6 +4,48 @@ All notable changes to Writmint will land here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.0] — 2026-06-29
+
+Removed the vendored skeleton-crew runtime core. Writmint is now the
+standalone verification layer it always behaved as — the five pillars
+(`capability-manifest`, `permissions`, `approval`, `replay`, `errors`)
+plus `host-policy`, and nothing else.
+
+### Removed (breaking — public API)
+
+- **The plugin-runtime substrate is gone.** Deleted `runtime`,
+  `runtime-context`, `plugin-registry`, `plugin-loader`, `action-engine`,
+  `screen-registry`, `service-registry`, `event-bus`, `ui-bridge`,
+  `performance`, `execution-recorder`, `test-utils`, `types`, and
+  `plugins/` (`ConfigPlugin`, `FeatureFlagPlugin`). These were a clean,
+  unmodified copy of skeleton-crew ~0.4.x, re-exported from `index.ts` but
+  imported by **nothing** in the Writmint product (the pillars, the MCP
+  surface, and the triage/dogfood fixtures never touched them). Their
+  removal drops every `Runtime` / `PluginRegistry` / `ActionEngine` /
+  `swapPlugin` export. No pillar or product behavior changes.
+- This also retires the stale borrowed code: Writmint stopped shipping the
+  skeleton-crew-0.4.x-era defects (falsy-service `get`, non-atomic
+  hot-swap, config mutation) that were fixed upstream in 0.5.0–0.6.2 but
+  never backported here, because no Writmint code path exercised them.
+
+### Changed
+
+- **`index.browser.ts` now mirrors `index.ts`.** The pillars are
+  platform-neutral (SHA-256 is a pure in-package implementation, not
+  `node:crypto`), so the browser surface is identical to Node.
+- Dropped runtime dependency `fast-glob` (only `plugin-loader` used it) and
+  the `react` / `react-dom` / `vite` `optionalDependencies` (only the
+  deleted UI/example path used them). The package now has zero runtime
+  dependencies.
+- Deleted the 46 inherited skeleton-crew test files; the 18 pillar +
+  MCP + dogfood test files remain.
+
+### Note
+
+If Writmint manifests are ever made to *execute* as live plugins,
+reintroduce skeleton-crew (as a dependency or re-vendor) at that point —
+validating the verification product comes first.
+
 ## [0.5.2] — 2026-06-07
 
 A hardening patch completing the `denyPrivate` deny set. No new error
